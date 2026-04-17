@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Search as SearchIcon, 
   Mic, 
@@ -34,6 +34,31 @@ export default function KnowledgeSearch() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const performSearch = async () => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const data = await api.search(query);
+      setResults(data);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setToast({ message: '检索失败，请检查网络连接', id: Math.random().toString() });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      performSearch();
+    }
+  };
 
   const saveToWiki = async (result: SearchResult) => {
     if (savedIds.includes(result.id)) return;
@@ -61,36 +86,6 @@ export default function KnowledgeSearch() {
       console.error('Failed to save to wiki:', error);
     }
   };
-
-  const [results] = useState<SearchResult[]>([
-    {
-      id: '1',
-      title: '深度学习中的高效架构设计',
-      snippet: '在深度学习中，架构设计直接影响模型的推理效率。本文探讨了卷积神经网络（CNN）与 <mark class="bg-yellow-200">Transformer</mark> 架构的优化方案，特别是在移动设备端的能力...',
-      source: 'Tech_Research_v2.pdf',
-      relevance: 98,
-      type: 'pdf',
-      date: '2024-03-21'
-    },
-    {
-      id: '2',
-      title: '2024 年度 AI 行业趋势报告',
-      snippet: '报告指出，大语言模型（LLM）的检索增强生成（RAG）技术正在成为知识库的核心。通过结合高效的 <mark class="bg-yellow-200">智能检索</mark> 和传统搜索引擎，企业能够...',
-      source: 'Internal_Wiki',
-      relevance: 85,
-      type: 'doc',
-      date: '2024-04-01'
-    },
-    {
-      id: '3',
-      title: '如何构建一个 RAG 系统',
-      snippet: '构建一个基于知识库的问答系统需要考虑数据分块、模型选择以及重排序（Rerank）逻辑。对于 <mark class="bg-yellow-200">语义理解</mark> 的准确性至关重要...',
-      source: 'https://docs.ai-system.io',
-      relevance: 72,
-      type: 'web',
-      date: '2023-11-15'
-    }
-  ]);
 
   return (
     <div className="flex h-full bg-white relative overflow-hidden">
@@ -158,7 +153,9 @@ export default function KnowledgeSearch() {
                     { text: '多模态 Tokenization', trend: '+8%' },
                     { text: '向量数据库对比', trend: '+24%' }
                   ].map(item => (
-                    <div key={item.text} className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 shadow-sm transition-transform hover:scale-[1.02] cursor-pointer">
+                    <div key={item.text} 
+                         onClick={() => { setQuery(item.text); setTimeout(performSearch, 50); }}
+                         className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 shadow-sm transition-transform hover:scale-[1.02] cursor-pointer">
                        <span className="text-xs font-bold text-slate-700">{item.text}</span>
                        <span className="text-[9px] font-black text-emerald-500 uppercase">{item.trend}</span>
                     </div>
@@ -181,12 +178,13 @@ export default function KnowledgeSearch() {
                 type="text" 
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="键入自然语言指令或关键词启动语义检索..." 
                 className="w-full h-14 pl-14 pr-32 bg-slate-50/50 border-2 border-slate-100 rounded-[24px] text-lg font-medium focus:bg-white focus:border-slate-900 focus:shadow-2xl transition-all outline-none"
                />
                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                   <button className="p-2 text-slate-400 hover:text-slate-900"><Mic size={18} /></button>
-                  <button className="px-6 py-2 bg-slate-900 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">
+                  <button onClick={performSearch} className="px-6 py-2 bg-slate-900 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">
                      发现知识
                   </button>
                </div>
@@ -201,13 +199,26 @@ export default function KnowledgeSearch() {
          <div className="flex-1 overflow-y-auto p-10 lg:p-14 bg-slate-50/20 custom-scrollbar">
             <div className="max-w-5xl mx-auto space-y-10">
                <div className="flex items-center justify-between px-2">
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">本次共计扫描 12,450 节点，找到 3 个高匹配项 (耗时 42ms)</p>
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    {isSearching ? '正在扫描全量知识节点...' : `本次共计扫描知识网络，找到 ${results.length} 个高匹配项`}
+                  </p>
                   <div className="flex items-center gap-4">
                      <span className="text-xs font-bold text-slate-500 flex items-center gap-2">相关度排序 <ChevronDown size={14} /></span>
                   </div>
                </div>
 
                <AnimatePresence>
+                  {results.length === 0 && !isSearching && query.length > 0 && (
+                     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="p-10 text-center text-slate-400">
+                        未找到与 "{query}" 相关的匹配项。尝试其他关键词或导入新知识。
+                     </motion.div>
+                  )}
+                  {results.length === 0 && !isSearching && query.length === 0 && (
+                     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="p-10 text-center text-slate-400">
+                        <Target size={48} className="mx-auto mb-4 opacity-20" />
+                        输入关键词探索知识图谱，或点击左侧热门趋势。
+                     </motion.div>
+                  )}
                   {results.map((result, idx) => (
                     <motion.div
                       key={result.id}

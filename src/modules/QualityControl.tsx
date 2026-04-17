@@ -51,8 +51,21 @@ const mockData = [
 export default function QualityControl() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'tasks'>('overview');
+  const [isScanning, setIsScanning] = useState(false);
+  const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
+
+  const handleStartScan = () => {
+    setIsScanning(true);
+    setToast({ message: '开始对 4.2k 个文档进行分布式全量扫描...', id: Date.now().toString() });
+    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => {
+      setIsScanning(false);
+      setToast({ message: '全量扫描完成，发现 2 个新建议项', id: Date.now().toString() });
+      setTimeout(() => setToast(null), 3000);
+    }, 4000);
+  };
   
-  const [issues] = useState<QualityIssue[]>([
+  const [issues, setIssues] = useState<QualityIssue[]>([
     {
       id: '1',
       type: 'contradiction',
@@ -204,17 +217,19 @@ export default function QualityControl() {
                  </div>
 
                  <div className="flex flex-col gap-8">
-                    <div className="rounded-[32px] bg-slate-900 text-white p-10 shadow-2xl relative overflow-hidden group">
+                    <div className="rounded-[32px] bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-10 shadow-xl relative overflow-hidden group">
                        <div className="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform">
                           <Zap size={200} />
                        </div>
                        <h3 className="text-xl font-black uppercase tracking-tight mb-4">智能核查引擎</h3>
-                       <p className="text-sm font-medium text-slate-400 mb-8 leading-relaxed">当前正在通过分布式推理集群对 4.2k 个文档进行深度语义对齐校验...</p>
+                       <p className="text-sm font-medium text-indigo-100 mb-8 leading-relaxed">
+                         {isScanning ? '正在高速并行解析底层数据图谱并定位逻辑冲突...' : '当前正在通过分布式推理集群对 4.2k 个文档进行深度语义对齐校验...'}
+                       </p>
                        <div className="space-y-4 relative z-10">
-                          <button className="w-full py-4 bg-white text-slate-900 rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all active:scale-95 shadow-xl">
-                             立即启动全量扫描
+                          <button onClick={handleStartScan} disabled={isScanning} className={`w-full py-4 text-sm font-black uppercase tracking-widest rounded-2xl transition-all shadow-md ${isScanning ? 'bg-indigo-800 text-indigo-300 cursor-not-allowed' : 'bg-white text-indigo-600 hover:bg-slate-50 active:scale-95'}`}>
+                             {isScanning ? '扫描中...' : '立即启动全量扫描'}
                           </button>
-                          <button className="w-full py-4 border border-slate-700 text-slate-400 rounded-2xl text-sm font-black uppercase tracking-widest hover:border-white hover:text-white transition-all">
+                          <button className="w-full py-4 border border-indigo-400 text-indigo-100 rounded-2xl text-sm font-black uppercase tracking-widest hover:border-white hover:text-white transition-all">
                              配置自动化规则
                           </button>
                        </div>
@@ -264,10 +279,17 @@ export default function QualityControl() {
                          <div className="flex items-center justify-between pt-6 border-t border-slate-100">
                             <div className="flex -space-x-2">
                                {issue.affectedPages.map((p, i) => (
-                                 <div key={i} className="h-8 w-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-black text-slate-600 shadow-sm">{p[0]}</div>
+                                 <div title={p} key={i} className="h-8 w-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-black text-slate-600 shadow-sm">{p[0]}</div>
                                ))}
                             </div>
-                            <button className="flex items-center gap-2 px-5 py-2 rounded-xl bg-slate-50 text-slate-900 text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all">
+                            <button 
+                              onClick={() => {
+                                setIssues(issues.filter(i => i.id !== issue.id));
+                                setToast({ message: '异常已标记为解决', id: Math.random().toString() });
+                                setTimeout(() => setToast(null), 3000);
+                              }}
+                              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-slate-50 text-slate-900 text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all"
+                            >
                                解决 <ArrowUpRight size={12} />
                             </button>
                          </div>
@@ -332,11 +354,26 @@ export default function QualityControl() {
 
          {activeTab === 'tasks' && (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
-               <Cpu size={64} className="opacity-10 mb-6" />
-               <p className="text-lg font-black uppercase tracking-[0.2em] opacity-30">分布式核查算力池正在调度中...</p>
+               <Cpu size={64} className={`opacity-20 mb-6 ${isScanning ? 'animate-pulse text-blue-500' : ''}`} />
+               <p className="text-lg font-black uppercase tracking-[0.2em] opacity-50">
+                 {isScanning ? '核心计算集群正在火力全开处理知识扫描任务...' : '分布式核查算力池正在调度中...'}
+               </p>
             </div>
          )}
       </div>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-slate-900 text-white rounded-full shadow-lg font-bold text-sm flex items-center gap-2"
+          >
+             {isScanning ? <RefreshCw size={16} className="animate-spin text-blue-400" /> : <CheckCircle2 size={16} className="text-emerald-400" />} {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadFile } from '../types.ts';
+import { api } from '../lib/api.ts';
 
 export default function DocumentUpload() {
   const [files, setFiles] = useState<UploadFile[]>([
@@ -67,9 +68,48 @@ export default function DocumentUpload() {
     },
   ]);
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>('1');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files).map(file => {
+        return {
+          id: Date.now().toString() + Math.random().toString(),
+          name: file.name,
+          size: (file.size / 1024 / 1024).toFixed(1) + ' MB',
+          type: file.type.includes('image') ? 'image' : file.name.endsWith('.pdf') ? 'pdf' : file.name.endsWith('.md') ? 'md' : 'doc',
+          progress: 100,
+          status: 'success' as const,
+          content: '新上传的文档内容。此文档已被智能引擎解析入库。',
+          previewUrl: file.type.includes('image') ? URL.createObjectURL(file) : undefined
+        };
+      });
+      setFiles(prev => [...newFiles, ...prev]);
+      if (newFiles.length > 0) {
+        setSelectedFileId(newFiles[0].id);
+        
+        // Push the first uploaded file to the Wiki DB to simulate backend indexing pipeline
+        try {
+          await api.saveWikiPage({
+            id: newFiles[0].id,
+            title: newFiles[0].name,
+            content: newFiles[0].content,
+            snippet: '此文档刚被系统扫描并建立结构化索引',
+            source: 'Local Upload',
+            type: newFiles[0].type,
+            relevance: 100,
+            author: 'Current User',
+            tags: ['Uploaded', newFiles[0].type.toUpperCase()]
+          });
+        } catch (err) {
+          console.error("Auto-index failed", err);
+        }
+      }
+    }
+  };
 
   const filteredFiles = useMemo(() => {
     return files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -122,7 +162,15 @@ export default function DocumentUpload() {
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                />
             </div>
-            <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg shadow-slate-200 hover:bg-blue-600 transition-all">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              multiple 
+              onChange={handleFileUpload} 
+              accept=".pdf,.doc,.docx,.txt,.md,image/*" 
+            />
+            <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg shadow-slate-200 hover:bg-blue-600 transition-all">
                <UploadCloud size={14} /> 导入新文档
             </button>
          </div>

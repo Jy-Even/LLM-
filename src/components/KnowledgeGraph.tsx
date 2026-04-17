@@ -311,7 +311,7 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="absolute top-4 left-4 w-72 bg-white/95 backdrop-blur-lg rounded-2xl border border-slate-200 shadow-xl overflow-hidden flex flex-col max-h-[calc(100%-80px)]"
+            className="absolute top-4 left-4 w-72 bg-white/95 backdrop-blur-lg rounded-2xl border border-slate-200 shadow-[0_20px_50px_rgba(0,0,0,0.2)] overflow-hidden flex flex-col max-h-[calc(100%-120px)] z-[100]"
           >
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                <div className="flex items-center gap-3">

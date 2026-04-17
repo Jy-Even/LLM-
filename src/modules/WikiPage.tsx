@@ -36,6 +36,7 @@ export default function WikiPageModule() {
   const [pages, setPages] = useState<WikiPage[]>([]);
   const [activePage, setActivePage] = useState<WikiPage | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
 
   useEffect(() => {
     fetchPages();
@@ -52,6 +53,28 @@ export default function WikiPageModule() {
     } catch (error) {
       console.error('Failed to fetch wiki pages:', error);
       setLoading(false);
+    }
+  };
+
+  const handleCreatePage = async () => {
+    try {
+      const newPageTitle = `New Page ${pages.length + 1}`;
+      const response = await api.saveWikiPage({
+        id: Date.now().toString(),
+        title: newPageTitle,
+        content: '# 新篇章\n\n在这里开始编写您的主要内容。',
+        snippet: '新创建的知识页面',
+        source: 'User Creation',
+        type: 'page',
+        relevance: 100,
+        author: 'Current User',
+        tags: ['New']
+      });
+      fetchPages();
+      setToast({ message: '新页面创建成功', id: Date.now().toString() });
+      setTimeout(() => setToast(null), 3000);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -92,7 +115,7 @@ export default function WikiPageModule() {
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                />
             </div>
-            <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-blue-600 transition-all active:scale-95">
+            <button onClick={handleCreatePage} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-white text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-blue-600 transition-all active:scale-95">
                <Plus size={16} /> 创建新篇章
             </button>
          </div>
@@ -280,6 +303,19 @@ export default function WikiPageModule() {
             <button className="h-12 w-12 rounded-2xl bg-slate-900 text-white shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"><Maximize2 size={20} /></button>
          </div>
       </main>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-slate-900 text-white rounded-full shadow-lg font-bold text-sm"
+          >
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

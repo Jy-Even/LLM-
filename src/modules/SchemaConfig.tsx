@@ -254,13 +254,13 @@ export default function SchemaConfig() {
 
                       {/* Warnings and Meta */}
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 p-6 bg-slate-900 rounded-3xl flex gap-5 text-white shadow-2xl shadow-slate-400/20">
-                           <div className="h-10 w-10 shrink-0 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                              <AlertTriangle className="h-5 w-5 text-blue-400" />
+                        <div className="lg:col-span-2 p-6 bg-slate-50 border border-slate-200 rounded-3xl flex gap-5 text-slate-800 shadow-sm transition-all hover:bg-white hover:shadow-md">
+                           <div className="h-10 w-10 shrink-0 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-100">
+                              <AlertTriangle className="h-5 w-5 text-amber-500" />
                            </div>
                            <div className="space-y-1">
-                              <p className="text-xs font-black uppercase tracking-widest text-blue-400">系统审计建议</p>
-                              <p className="text-sm text-slate-300 leading-relaxed font-medium">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">系统审计建议</p>
+                              <p className="text-sm text-slate-600 leading-[1.8] font-medium">
                                 修改 `ResearchPaper` 架构可能会触发自动化数据重构任务。建议首先在 STAGING 环境进行演练，并确保 Elasticsearch 索引同步服务处于就绪状态。
                               </p>
                            </div>
