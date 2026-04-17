@@ -2,7 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
 import { GraphData, GraphNode, GraphLink } from '../types';
-import { Maximize2, Minimize2, RefreshCw, ZoomIn, ZoomOut, Zap, ArrowRight, ExternalLink, Link2 } from 'lucide-react';
+import { 
+  Maximize2, 
+  Minimize2, 
+  RefreshCw, 
+  ZoomIn, 
+  ZoomOut, 
+  Zap, 
+  ArrowRight, 
+  ExternalLink, 
+  Link2,
+  FileText,
+  Hash,
+  User 
+} from 'lucide-react';
 
 const MOCK_GRAPH: GraphData = {
   nodes: [
@@ -258,20 +271,35 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 p-3 shadow-sm">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">图谱图例</div>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-            <span className="text-[11px] font-medium text-slate-600">知识页面</span>
+      <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 p-4 shadow-xl ring-1 ring-slate-900/5 transition-all hover:scale-[1.02]">
+        <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">图谱图例标识</div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="h-7 w-7 rounded-lg bg-blue-100 flex items-center justify-center">
+              <FileText className="h-4 w-4 text-blue-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">知识页面</span>
+              <span className="text-[9px] font-bold text-slate-400">核心文档节点</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
-            <span className="text-[11px] font-medium text-slate-600">关联标签</span>
+          <div className="flex items-center gap-3">
+            <div className="h-7 w-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <Hash className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">关联标签</span>
+              <span className="text-[9px] font-bold text-slate-400">语义分类维度</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-amber-500"></div>
-            <span className="text-[11px] font-medium text-slate-600">主要作者</span>
+          <div className="flex items-center gap-3">
+            <div className="h-7 w-7 rounded-lg bg-amber-100 flex items-center justify-center">
+              <User className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">主要作者</span>
+              <span className="text-[9px] font-bold text-slate-400">内容贡献主体</span>
+            </div>
           </div>
         </div>
       </div>

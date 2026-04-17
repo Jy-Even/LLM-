@@ -29,20 +29,38 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from '../types.ts';
 import { ai, MODELS } from '../lib/gemini.ts';
+import { api } from '../lib/api.ts';
 
 export default function IntelligentChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: '你好！我是您的知识库助手。我已经学习了您的所有文档，您可以问我关于深度学习、Transformer 架构或者 RAG 系统的任何问题。',
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessions, setSessions] = useState([
     { id: '1', title: '深度学习基础探讨', date: '今天' },
     { id: '2', title: 'Transformer 架构总结', date: '今天' },
     { id: '3', title: '模型量化方案讨论', date: '昨日' },
   ]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const history = await api.getChatHistory();
+      if (history.length > 0) {
+        setMessages(history);
+      } else {
+        setMessages([
+          {
+            id: '1',
+            role: 'assistant',
+            content: '你好！我是您的知识库助手。我已经学习了您的所有文档，您可以问我关于深度学习、Transformer 架构或者 RAG 系统的任何问题。',
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch chat history:', error);
+    }
+  };
   const [activeSessionId, setActiveSessionId] = useState('1');
   const [input, setInput] = useState('');
   const [isDeepMode, setIsDeepMode] = useState(false);
@@ -128,6 +146,9 @@ export default function IntelligentChat() {
     setMessages(prev => [...prev, newAssistantMessage]);
 
     try {
+      // Save User Message
+      await api.sendChatMessage({ role: 'user', content: currentInput });
+
       const responseStream = await chatInstance.current.sendMessageStream({
         message: currentInput,
       });
@@ -139,6 +160,10 @@ export default function IntelligentChat() {
           msg.id === assistantMsgId ? { ...msg, content: fullContent } : msg
         ));
       }
+      
+      // Save Assistant Message
+      await api.sendChatMessage({ role: 'assistant', content: fullContent });
+
     } catch (error) {
       console.error(error);
       setMessages(prev => prev.map(msg => 

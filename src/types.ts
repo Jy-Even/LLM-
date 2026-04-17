@@ -10,6 +10,10 @@ export interface WikiPage {
   updatedAt: string;
   author: string;
   citations: number;
+  snippet?: string;
+  source?: string;
+  relevance?: number;
+  type?: string;
 }
 
 export interface SearchResult {

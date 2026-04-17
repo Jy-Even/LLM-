@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SearchResult } from '../types.ts';
+import { api } from '../lib/api.ts';
 
 export default function KnowledgeSearch() {
   const [query, setQuery] = useState('');
@@ -34,14 +35,31 @@ export default function KnowledgeSearch() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
 
-  const saveToWiki = (title: string, id: string) => {
-    if (savedIds.includes(id)) return;
-    setSavedIds(prev => [...prev, id]);
-    setToast({ 
-      message: `"${title.slice(0, 20)}..." 已成功归档至 Wiki 知识库`, 
-      id: Math.random().toString() 
-    });
-    setTimeout(() => setToast(null), 3000);
+  const saveToWiki = async (result: SearchResult) => {
+    if (savedIds.includes(result.id)) return;
+    
+    try {
+      await api.saveWikiPage({
+        id: result.id,
+        title: result.title,
+        content: `### ${result.title}\n\n${result.snippet.replace(/<mark[^>]*>|<\/mark>/g, '')}\n\n*Source: ${result.source}*`,
+        snippet: result.snippet,
+        source: result.source,
+        type: result.type,
+        relevance: result.relevance,
+        author: 'System',
+        tags: ['AI', result.type.toUpperCase()]
+      });
+
+      setSavedIds(prev => [...prev, result.id]);
+      setToast({ 
+        message: `"${result.title.slice(0, 20)}..." 已成功归档至 Wiki 知识库`, 
+        id: Math.random().toString() 
+      });
+      setTimeout(() => setToast(null), 3000);
+    } catch (error) {
+      console.error('Failed to save to wiki:', error);
+    }
   };
 
   const [results] = useState<SearchResult[]>([
@@ -209,7 +227,7 @@ export default function KnowledgeSearch() {
                                        {result.type.toUpperCase()}
                                     </div>
                                     <button 
-                                      onClick={(e) => { e.stopPropagation(); saveToWiki(result.title, result.id); }}
+                                      onClick={(e) => { e.stopPropagation(); saveToWiki(result); }}
                                       className={`p-2 rounded-xl border transition-all ${
                                         savedIds.includes(result.id) 
                                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
@@ -260,7 +278,7 @@ export default function KnowledgeSearch() {
                                 </button>
                              ) : (
                                 <button 
-                                  onClick={(e) => { e.stopPropagation(); saveToWiki(result.title, result.id); }}
+                                  onClick={(e) => { e.stopPropagation(); saveToWiki(result); }}
                                   className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200"
                                 >
                                    <BookOpen size={18} /> 存为 Wiki 详情

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { 
   Search, 
   Plus, 
@@ -26,11 +26,34 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import KnowledgeGraph from '../components/KnowledgeGraph';
+import { api } from '../lib/api.ts';
+import { WikiPage } from '../types.ts';
 
 export default function WikiPageModule() {
   const [activeTab, setActiveTab] = useState<'content' | 'graph'>('content');
   const [expandedNodes, setExpandedNodes] = useState<string[]>(['root']);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [pages, setPages] = useState<WikiPage[]>([]);
+  const [activePage, setActivePage] = useState<WikiPage | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPages();
+  }, []);
+
+  const fetchPages = async () => {
+    try {
+      const data = await api.getWikiPages();
+      setPages(data);
+      if (data.length > 0 && !activePage) {
+        setActivePage(data[0]);
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch wiki pages:', error);
+      setLoading(false);
+    }
+  };
 
   const toggleNode = (id: string) => {
     setExpandedNodes(prev => prev.includes(id) ? prev.filter(n => n !== id) : [...prev, id]);
@@ -38,9 +61,11 @@ export default function WikiPageModule() {
 
   const handleNodeClick = useCallback((node: any) => {
     if (node.type === 'page') {
+      const page = pages.find(p => p.id === node.id);
+      if (page) setActivePage(page);
       setActiveTab('content');
     }
-  }, []);
+  }, [pages]);
 
   return (
     <div className="flex h-full bg-white relative overflow-hidden">
@@ -76,10 +101,14 @@ export default function WikiPageModule() {
             <section>
                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">快速访问</h4>
                <div className="space-y-1">
-                  {['深度学习核心概念', 'Transformer 架构详解', '向量检索优化策略'].map(title => (
-                    <div key={title} className="flex items-center gap-3 p-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-white hover:shadow-sm transition-all cursor-pointer group">
-                       <Star size={14} className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                       <span className="truncate">{title}</span>
+                  {pages.slice(0, 5).map(page => (
+                    <div 
+                      key={page.id} 
+                      onClick={() => setActivePage(page)}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer group ${activePage?.id === page.id ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}
+                    >
+                       <Star size={14} className={`text-amber-400 transition-opacity ${activePage?.id === page.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                       <span className="truncate">{page.title}</span>
                     </div>
                   ))}
                </div>
@@ -139,7 +168,9 @@ export default function WikiPageModule() {
                   <ChevronRight size={12} className="text-slate-300" />
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 cursor-pointer">深度学习</span>
                   <ChevronRight size={12} className="text-slate-300" />
-                  <span className="text-sm font-black text-slate-900 uppercase tracking-tight px-3 py-1 bg-slate-100 rounded-lg">深度学习中的核心组件解析</span>
+                  <span className="text-sm font-black text-slate-900 uppercase tracking-tight px-3 py-1 bg-slate-100 rounded-lg">
+                     {activePage?.title || '未选择页面'}
+                  </span>
                </div>
             </div>
 
@@ -163,100 +194,78 @@ export default function WikiPageModule() {
          <div className="flex-1 overflow-y-auto bg-slate-50/20 custom-scrollbar">
             {activeTab === 'content' ? (
                <div className="max-w-[900px] mx-auto p-12 lg:p-20">
-                  <motion.article 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white rounded-[40px] border border-slate-200 shadow-2xl p-16 lg:p-24 min-h-[1200px] relative overflow-hidden"
-                  >
-                     
-                     <div className="mb-16 space-y-6">
-                        <div className="flex items-center gap-4 text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">
-                           <div className="h-px flex-1 bg-blue-100" />
-                           DOC ID: #DL-CORE-001
-                           <div className="h-px flex-1 bg-blue-100" />
-                        </div>
-                        <h1 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
-                           深度学习中的<br />核心组件解析
-                        </h1>
-                        <div className="flex flex-wrap items-center gap-8 pt-4">
-                           <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black">AI</div>
-                              <div>
-                                 <p className="text-[10px] text-slate-400 font-black uppercase">主要执笔</p>
-                                 <p className="text-xs font-bold text-slate-800">智能知识库引擎</p>
-                              </div>
-                           </div>
-                           <div>
-                              <p className="text-[10px] text-slate-400 font-black uppercase">最后修订</p>
-                              <p className="text-xs font-bold text-slate-800">2024-04-12 14:30</p>
-                           </div>
-                           <div>
-                              <p className="text-[10px] text-slate-400 font-black uppercase">可读性评分</p>
-                              <div className="flex gap-1 mt-1">
-                                 {[1,2,3,4,5].map(i => <div key={i} className="h-1 w-4 rounded-full bg-blue-500" />)}
-                              </div>
-                           </div>
-                        </div>
-                     </div>
+                  {activePage ? (
+                    <motion.article 
+                      key={activePage.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white rounded-[40px] border border-slate-200 shadow-2xl p-16 lg:p-24 min-h-[1200px] relative overflow-hidden"
+                    >
+                       <div className="mb-16 space-y-6">
+                          <div className="flex items-center gap-4 text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">
+                             <div className="h-px flex-1 bg-blue-100" />
+                             DOC ID: #{activePage.id.toUpperCase().slice(0, 8)}
+                             <div className="h-px flex-1 bg-blue-100" />
+                          </div>
+                          <h1 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1]">
+                             {activePage.title}
+                          </h1>
+                          <div className="flex flex-wrap items-center gap-8 pt-4">
+                             <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black">AI</div>
+                                <div>
+                                   <p className="text-[10px] text-slate-400 font-black uppercase">主要执笔</p>
+                                   <p className="text-xs font-bold text-slate-800">{activePage.author || '智能知识库引擎'}</p>
+                                </div>
+                             </div>
+                             <div>
+                                <p className="text-[10px] text-slate-400 font-black uppercase">最后修订</p>
+                                <p className="text-xs font-bold text-slate-800">{activePage.updatedAt || '刚刚'}</p>
+                             </div>
+                             {activePage.tags && activePage.tags.length > 0 && (
+                               <div className="flex gap-2">
+                                  {activePage.tags.map(tag => (
+                                    <span key={tag} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase border border-blue-100">{tag}</span>
+                                  ))}
+                               </div>
+                             )}
+                          </div>
+                       </div>
 
-                     <div className="prose prose-slate max-w-none prose-headings:font-black prose-headings:text-slate-900 prose-headings:tracking-tighter prose-p:text-slate-600 prose-p:text-lg prose-p:leading-[2] prose-strong:text-slate-900 prose-blockquote:border-l-4 prose-blockquote:border-blue-600 prose-blockquote:bg-blue-50 prose-blockquote:p-6 prose-blockquote:rounded-r-2xl prose-blockquote:not-italic prose-blockquote:text-blue-900">
-                        <h2># 背景与动机</h2>
-                        <p>
-                           在深度学习的研究与应用中，理解其核心组件是如何相互作用的至关重要。这不仅影响着模型的最终性能，更决定了系统在垂直领域执行任务时的<b>稳定性</b>与<b>可解释性</b>。
-                        </p>
+                       <div 
+                         className="prose prose-slate max-w-none prose-headings:font-black prose-headings:text-slate-900 prose-headings:tracking-tighter prose-p:text-slate-600 prose-p:text-lg prose-p:leading-[2] prose-strong:text-slate-900 prose-blockquote:border-l-4 prose-blockquote:border-blue-600 prose-blockquote:bg-blue-50 prose-blockquote:p-6 prose-blockquote:rounded-r-2xl prose-blockquote:not-italic prose-blockquote:text-blue-900"
+                         dangerouslySetInnerHTML={{ __html: activePage.content || '' }}
+                       />
 
-                        <blockquote>
-                           “神经网络的本质并非简单的堆叠，而是对数据特征维度的不断抽象与非线性变换过程。”
-                        </blockquote>
-
-                        <h2># 核心三大支柱</h2>
-                        <ul>
-                           <li>
-                              <strong>激活函数 (Activation Functions)</strong>: 
-                              决定了神经元对信息的传递阈值与非线性特征。ReLU 及其变体是目前大规模工业应用的首选。
-                           </li>
-                           <li>
-                              <strong>权重初始化 (Initialization)</strong>: 
-                              由于深度网络的复杂梯度流动，合理的初始化策略能有效防止梯度消失或爆炸。
-                           </li>
-                           <li>
-                              <strong>注意力机制 (Attention Mechanism)</strong>: 
-                              彻底改变了序列建模的方式，通过计算输入序列内部的相互关联程度实现对信息的精准聚焦。
-                           </li>
-                        </ul>
-
-                        <div className="my-16 p-10 bg-slate-900 rounded-[32px] text-white relative overflow-hidden">
-                           <div className="absolute top-0 right-0 p-8 opacity-20">
-                              <Zap size={100} />
-                           </div>
-                           <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-4">专家点评</h4>
-                           <p className="text-lg font-medium leading-relaxed italic border-l-2 border-blue-500 pl-8">
-                              “在高阶 RAG 架构中，Wiki 内容不仅是人类检索的对象，更是 LLM 执行上下文学习的关键语料。因此，内容的结构化深度直接决定了智能体的表现。”
-                           </p>
-                        </div>
-                     </div>
-
-                     <div className="mt-20 pt-10 border-t border-slate-100 grid grid-cols-2 lg:grid-cols-4 gap-8">
-                        {['关联资源 (12)', '反向引用 (86)', '被引用指数 (High)', '标签热度 (Top)'].map(meta => (
-                           <div key={meta} className="space-y-2 group cursor-pointer">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">{meta.split(' (')[0]}</p>
-                              <p className="text-xl font-black text-slate-900">{meta.includes('(') ? meta.split('(')[1].replace(')', '') : 'HOT'}</p>
-                           </div>
-                        ))}
-                     </div>
-                  </motion.article>
+                       <div className="mt-20 pt-10 border-t border-slate-100 grid grid-cols-2 lg:grid-cols-4 gap-8">
+                          {[`关联资源 (${activePage.citations || 0})`, '反向引用 (0)', '被引用指数 (Normal)', '标签热度 (Top)'].map(meta => (
+                             <div key={meta} className="space-y-2 group cursor-pointer">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-blue-600 transition-colors">{meta.split(' (')[0]}</p>
+                                <p className="text-xl font-black text-slate-900">{meta.includes('(') ? meta.split('(')[1].replace(')', '') : 'HOT'}</p>
+                             </div>
+                          ))}
+                       </div>
+                    </motion.article>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-20 text-slate-400 space-y-4">
+                       <BookOpen size={64} className="opacity-20" />
+                       <p className="font-black uppercase tracking-widest">暂无选定内容，请从左侧目录选择</p>
+                    </div>
+                  )}
                </div>
             ) : (
                <div className="h-full relative bg-slate-50">
-                  <div className="absolute top-6 left-6 z-10 p-6 bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200 shadow-xl max-w-xs">
-                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <GitBranch size={14} className="text-blue-600" /> 图谱导航说明
+                  <div className="absolute bottom-8 right-24 z-10 p-5 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl max-w-[280px] ring-1 ring-slate-900/5 transition-all hover:bg-white">
+                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Zap size={14} className="text-amber-500 fill-amber-500" /> 图谱交互指南
                      </h4>
-                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">当前视图展示了知识库中所有内容节点之间的逻辑引用关系。节点颜色代表内容权重，连线粗细代表相关度密度。</p>
-                     <div className="mt-4 flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><div className="h-2 w-2 rounded-full bg-blue-500" /> 原理</div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><div className="h-2 w-2 rounded-full bg-purple-500" /> 架构</div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600"><div className="h-2 w-2 rounded-full bg-emerald-500" /> 实践</div>
+                     <p className="text-[11px] text-slate-500 leading-relaxed font-bold mb-4">
+                        当前视图展示了知识库节点间的引用关联。您可以拖拽节点调整布局，或点击节点查看详细元数据。
+                     </p>
+                     <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+                        <div className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-blue-100">滚轮缩放</div>
+                        <div className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-emerald-100">左键点击</div>
+                        <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-amber-100">长按拖拽</div>
                      </div>
                   </div>
                   <KnowledgeGraph onNodeClick={handleNodeClick} />
