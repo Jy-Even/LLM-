@@ -37,6 +37,7 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { QualityIssue } from '../types.ts';
+import { useToast } from '../lib/ToastContext.tsx';
 
 const mockData = [
   { name: '04-10', errors: 12, warnings: 34, suggestions: 45 },
@@ -52,16 +53,14 @@ export default function QualityControl() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'tasks'>('overview');
   const [isScanning, setIsScanning] = useState(false);
-  const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
+  const { toast } = useToast();
 
   const handleStartScan = () => {
     setIsScanning(true);
-    setToast({ message: '开始对 4.2k 个文档进行分布式全量扫描...', id: Date.now().toString() });
-    setTimeout(() => setToast(null), 3000);
+    toast('开始对 4.2k 个文档进行分布式全量扫描...', 'info');
     setTimeout(() => {
       setIsScanning(false);
-      setToast({ message: '全量扫描完成，发现 2 个新建议项', id: Date.now().toString() });
-      setTimeout(() => setToast(null), 3000);
+      toast('全量扫描完成，发现 2 个新建议项', 'success');
     }, 4000);
   };
   
@@ -140,8 +139,8 @@ export default function QualityControl() {
                   <motion.div initial={{ width: 0 }} animate={{ width: '82%' }} className="h-full bg-emerald-500" />
                </div>
             </div>
-            <button className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all"><Bell size={18} /></button>
-            <button className="p-2.5 bg-slate-100 text-slate-600 rounded-xl"><Settings size={18} /></button>
+            <button onClick={() => toast('您有 3 条新的质量检测通知')} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all"><Bell size={18} /></button>
+            <button onClick={() => toast('正在开发仪表盘配置面板...')} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all"><Settings size={18} /></button>
          </div>
       </header>
 
@@ -229,7 +228,7 @@ export default function QualityControl() {
                           <button onClick={handleStartScan} disabled={isScanning} className={`w-full py-4 text-sm font-black uppercase tracking-widest rounded-2xl transition-all shadow-md ${isScanning ? 'bg-indigo-800 text-indigo-300 cursor-not-allowed' : 'bg-white text-indigo-600 hover:bg-slate-50 active:scale-95'}`}>
                              {isScanning ? '扫描中...' : '立即启动全量扫描'}
                           </button>
-                          <button className="w-full py-4 border border-indigo-400 text-indigo-100 rounded-2xl text-sm font-black uppercase tracking-widest hover:border-white hover:text-white transition-all">
+                          <button onClick={() => toast('配置接口准备中...')} className="w-full py-4 border border-indigo-400 text-indigo-100 rounded-2xl text-sm font-black uppercase tracking-widest hover:border-white hover:text-white transition-all">
                              配置自动化规则
                           </button>
                        </div>
@@ -285,8 +284,7 @@ export default function QualityControl() {
                             <button 
                               onClick={() => {
                                 setIssues(issues.filter(i => i.id !== issue.id));
-                                setToast({ message: '异常已标记为解决', id: Math.random().toString() });
-                                setTimeout(() => setToast(null), 3000);
+                                toast('异常已标记为解决', 'success');
                               }}
                               className="flex items-center gap-2 px-5 py-2 rounded-xl bg-slate-50 text-slate-900 text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all"
                             >
@@ -342,7 +340,7 @@ export default function QualityControl() {
                                 </div>
                              </td>
                              <td className="px-10 py-8 text-right pr-12">
-                                <button className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-slate-900 transition-all"><MoreVertical size={18} /></button>
+                                <button onClick={() => toast('已展开操作项')} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-slate-900 transition-all"><MoreVertical size={18} /></button>
                              </td>
                           </tr>
                        ))}
@@ -361,19 +359,6 @@ export default function QualityControl() {
             </div>
          )}
       </div>
-
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-slate-900 text-white rounded-full shadow-lg font-bold text-sm flex items-center gap-2"
-          >
-             {isScanning ? <RefreshCw size={16} className="animate-spin text-blue-400" /> : <CheckCircle2 size={16} className="text-emerald-400" />} {toast.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

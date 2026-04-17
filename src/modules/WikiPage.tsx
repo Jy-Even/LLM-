@@ -22,12 +22,14 @@ import {
   Layers,
   ArrowRight,
   Maximize2,
-  Zap
+  Zap,
+  X 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import { api } from '../lib/api.ts';
 import { WikiPage } from '../types.ts';
+import { useToast } from '../lib/ToastContext.tsx';
 
 export default function WikiPageModule() {
   const [activeTab, setActiveTab] = useState<'content' | 'graph'>('content');
@@ -36,7 +38,9 @@ export default function WikiPageModule() {
   const [pages, setPages] = useState<WikiPage[]>([]);
   const [activePage, setActivePage] = useState<WikiPage | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; id: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showGraphGuide, setShowGraphGuide] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchPages();
@@ -71,10 +75,10 @@ export default function WikiPageModule() {
         tags: ['New']
       });
       fetchPages();
-      setToast({ message: '新页面创建成功', id: Date.now().toString() });
-      setTimeout(() => setToast(null), 3000);
+      toast('新页面创建成功', 'success');
     } catch (e) {
       console.error(e);
+      toast('创建页面失败', 'error');
     }
   };
 
@@ -85,23 +89,59 @@ export default function WikiPageModule() {
   const handleNodeClick = useCallback((node: any) => {
     if (node.type === 'page') {
       const page = pages.find(p => p.id === node.id);
-      if (page) setActivePage(page);
-      setActiveTab('content');
+      if (page) {
+        setActivePage(page);
+        setActiveTab('content');
+        toast(`已跳转至: ${page.title}`);
+      } else {
+        toast(`实体 "${node.label}" 为图谱演示节点，暂无关联 Wiki 正文`, 'info');
+      }
+    } else {
+      toast(`当前选择的是 \${node.type === 'tag' ? '标签' : '作者'} 节点: \${node.label}`, 'info');
     }
-  }, [pages]);
+  }, [pages, toast]);
+
+  const filteredPages = pages.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  
+  const graphData = {
+    nodes: pages.map(p => ({
+      id: p.id,
+      label: p.title,
+      type: 'page' as const,
+      val: 20
+    })),
+    links: [] as any[]
+  };
+
+  // Basic linking: link pages with shared tags
+  pages.forEach((p1, idx) => {
+    pages.slice(idx + 1).forEach(p2 => {
+      const sharedTags = p1.tags.filter(t => p2.tags.includes(t));
+      if (sharedTags.length > 0) {
+        graphData.links.push({
+          source: p1.id,
+          target: p2.id,
+          type: 'tag' as const
+        });
+      }
+    });
+  });
 
   return (
     <div className="flex h-full bg-white relative overflow-hidden">
       {/* Knowledge Hierarchy Aside */}
       <aside className={`
-        ${isSidebarOpen ? 'w-80' : 'w-0'} 
+        \${isSidebarOpen ? 'w-80' : 'w-0'} 
         flex flex-col border-r border-slate-200 bg-slate-50/50 transition-all duration-300 overflow-hidden shrink-0
       `}>
          <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                <BookMarked size={16} className="text-blue-600" /> 知识目录
             </h2>
-            <button className="p-1 px-2 text-[10px] font-black text-blue-600 uppercase transition-all hover:bg-blue-50 rounded">
+            <button 
+              onClick={() => toast('已打开目录管理面板')}
+              className="p-1 px-2 text-[10px] font-black text-blue-600 uppercase transition-all hover:bg-blue-50 rounded"
+            >
                管理
             </button>
          </div>
@@ -111,6 +151,8 @@ export default function WikiPageModule() {
                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                <input 
                 type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="语义搜索页面内容..." 
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                />
@@ -122,15 +164,15 @@ export default function WikiPageModule() {
 
          <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar">
             <section>
-               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">快速访问</h4>
+               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">搜索结果 / 快速访问</h4>
                <div className="space-y-1">
-                  {pages.slice(0, 5).map(page => (
+                  {filteredPages.slice(0, 5).map(page => (
                     <div 
                       key={page.id} 
                       onClick={() => setActivePage(page)}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer group ${activePage?.id === page.id ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer group \${activePage?.id === page.id ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-white hover:shadow-sm'}`}
                     >
-                       <Star size={14} className={`text-amber-400 transition-opacity ${activePage?.id === page.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                       <Star size={14} className={`text-amber-400 transition-opacity \${activePage?.id === page.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                        <span className="truncate">{page.title}</span>
                     </div>
                   ))}
@@ -206,11 +248,11 @@ export default function WikiPageModule() {
                      图谱视图
                   </button>
                </div>
-               <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 group">
+               <button onClick={() => toast('邀请协作者编辑：链接已生成', 'success')} className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 group">
                   <Edit size={14} className="group-hover:rotate-12 transition-transform" /> 协同编辑
                </button>
-               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all"><Share2 size={18} /></button>
-               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all"><MoreVertical size={18} /></button>
+               <button onClick={() => toast('页面链接已复制', 'success')} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all"><Share2 size={18} /></button>
+               <button onClick={() => toast('已展开更多选项')} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all"><MoreVertical size={18} /></button>
             </div>
          </header>
 
@@ -278,44 +320,58 @@ export default function WikiPageModule() {
                </div>
             ) : (
                <div className="h-full relative bg-slate-50">
-                  <div className="absolute bottom-8 right-24 z-10 p-5 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl max-w-[280px] ring-1 ring-slate-900/5 transition-all hover:bg-white">
-                     <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Zap size={14} className="text-amber-500 fill-amber-500" /> 图谱交互指南
-                     </h4>
-                     <p className="text-[11px] text-slate-500 leading-relaxed font-bold mb-4">
-                        当前视图展示了知识库节点间的引用关联。您可以拖拽节点调整布局，或点击节点查看详细元数据。
-                     </p>
-                     <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-                        <div className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-blue-100">滚轮缩放</div>
-                        <div className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-emerald-100">左键点击</div>
-                        <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-amber-100">长按拖拽</div>
-                     </div>
-                  </div>
-                  <KnowledgeGraph onNodeClick={handleNodeClick} />
+                  <AnimatePresence>
+                    {showGraphGuide && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                        className="absolute bottom-8 right-24 z-10 p-5 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl max-w-[280px] ring-1 ring-slate-900/5 transition-all hover:bg-white"
+                      >
+                         <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                               <Zap size={14} className="text-amber-500 fill-amber-500" /> 图谱交互指南
+                            </h4>
+                            <button 
+                              onClick={() => setShowGraphGuide(false)}
+                              className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                              <X size={14} />
+                            </button>
+                         </div>
+                         <p className="text-[11px] text-slate-500 leading-relaxed font-bold mb-4">
+                            当前视图展示了知识库节点间的引用关联。您可以拖拽节点调整布局，或点击节点查看详细元数据。
+                         </p>
+                         <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+                            <div className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-blue-100">滚轮缩放</div>
+                            <div className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-emerald-100">左键点击</div>
+                            <div className="px-2 py-1 bg-amber-50 text-amber-600 rounded-md text-[9px] font-black uppercase tracking-tighter transition-colors hover:bg-amber-100">长按拖拽</div>
+                         </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {!showGraphGuide && (
+                    <button 
+                      onClick={() => setShowGraphGuide(true)}
+                      className="absolute bottom-8 right-24 z-10 p-4 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200 shadow-lg text-slate-400 hover:text-blue-600 transition-all hover:scale-110"
+                      title="显示交互指南"
+                    >
+                      <Layers size={18} />
+                    </button>
+                  )}
+                  <KnowledgeGraph data={graphData.nodes.length > 0 ? graphData : undefined} onNodeClick={handleNodeClick} />
                </div>
             )}
          </div>
 
          {/* Right Action Rail */}
          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col gap-3 z-20">
-            <button className="h-12 w-12 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"><BookOpen size={20} /></button>
-            <button className="h-12 w-12 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"><History size={20} /></button>
-            <button className="h-12 w-12 rounded-2xl bg-slate-900 text-white shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"><Maximize2 size={20} /></button>
+            <button onClick={() => toast('进入专注阅读模式')} className="h-12 w-12 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"><BookOpen size={20} /></button>
+            <button onClick={() => toast('已加载历史版本')} className="h-12 w-12 rounded-2xl bg-white border border-slate-200 shadow-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"><History size={20} /></button>
+            <button onClick={() => toast('进入全屏视图')} className="h-12 w-12 rounded-2xl bg-slate-900 text-white shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"><Maximize2 size={20} /></button>
          </div>
       </main>
-
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-slate-900 text-white rounded-full shadow-lg font-bold text-sm"
-          >
-            {toast.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

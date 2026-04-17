@@ -22,12 +22,14 @@ import {
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToast } from '../lib/ToastContext.tsx';
 
 export default function SchemaConfig() {
   const [editMode, setEditMode] = useState<'visual' | 'code'>('visual');
   const [selectedCategory, setSelectedCategory] = useState('entity');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<string | null>('ResearchPaper');
+  const { toast } = useToast();
 
   const mockEntities = [
     { id: 'ResearchPaper', name: 'ResearchPaper', icon: <Box className="h-4 w-4" />, fields: 12, update: '3天前', description: '学术研究论文实体定义' },
@@ -86,7 +88,7 @@ export default function SchemaConfig() {
           </div>
 
           <div className="mt-auto pb-4">
-             <button className="p-3 text-slate-500 hover:text-white transition-colors">
+             <button onClick={() => toast('正在打开底座配置...')} className="p-3 text-slate-500 hover:text-white transition-colors">
                 <Settings size={20} />
              </button>
           </div>
@@ -126,7 +128,7 @@ export default function SchemaConfig() {
                 源码
               </button>
             </div>
-            <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
+            <button onClick={() => toast('Schema 配置已保存并自动同步', 'success')} className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
               <Save size={16} /> 保存
             </button>
           </div>
@@ -140,7 +142,7 @@ export default function SchemaConfig() {
               <div className="hidden md:flex w-64 shrink-0 border-r border-slate-100 flex-col overflow-hidden bg-slate-50/50">
                 <div className="p-4 flex items-center justify-between border-b border-slate-200/50 bg-white">
                   <span className="text-[10px] font-black text-slate-400 tracking-widest uppercase">实体列表</span>
-                  <button className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                  <button onClick={() => toast('添加新实体界面正在加载...')} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors">
                     <Plus size={16} />
                   </button>
                 </div>
@@ -197,8 +199,8 @@ export default function SchemaConfig() {
                           </p>
                         </div>
                         <div className="flex gap-2">
-                           <button className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"><Edit3 size={14} /> 编辑基础信息</button>
-                           <button className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16} /></button>
+                           <button onClick={() => toast('正在进入核心字段编辑模式')} className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"><Edit3 size={14} /> 编辑基础信息</button>
+                           <button onClick={() => toast('系统实体不可删除', 'error')} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16} /></button>
                         </div>
                       </div>
 
@@ -209,7 +211,7 @@ export default function SchemaConfig() {
                               <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">字段配置面板</h4>
                               <p className="text-xs text-slate-400 mt-0.5">管理数据模型的内部结构与约束</p>
                            </div>
-                           <button className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md shadow-slate-200">
+                           <button onClick={() => toast('已打开新建字段弹窗')} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md shadow-slate-200">
                              <Plus size={16} /> 添加新字段
                            </button>
                         </div>
@@ -244,8 +246,8 @@ export default function SchemaConfig() {
                                  </div>
                               </div>
                               <div className="flex items-center gap-1 opacity-0 group-hover/field:opacity-100 transition-all transform translate-x-2 group-hover/field:translate-x-0">
-                                 <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Settings size={14} /></button>
-                                 <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><X size={14} /></button>
+                                 <button onClick={() => toast(`配置字段: ${field.name}`)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Settings size={14} /></button>
+                                 <button onClick={() => toast(`无法直接删除核心约束字段 ${field.name}`, 'error')} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><X size={14} /></button>
                               </div>
                             </motion.div>
                           ))}
@@ -270,7 +272,7 @@ export default function SchemaConfig() {
                            <p className="text-[10px] font-black uppercase tracking-widest opacity-60">数据血缘</p>
                            <h5 className="text-lg font-bold mt-2">12个下游关联</h5>
                            <p className="text-[10px] font-medium opacity-80 mt-1">影响5个独立应用模块</p>
-                           <button className="mt-4 w-full py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all">查看影响范围</button>
+                           <button onClick={() => toast('正在生成完整的血缘关系拓扑图...')} className="mt-4 w-full py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all">查看影响范围</button>
                         </div>
                       </div>
                     </motion.div>

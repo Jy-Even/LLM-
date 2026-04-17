@@ -14,7 +14,8 @@ import {
   Link2,
   FileText,
   Hash,
-  User 
+  User,
+  X 
 } from 'lucide-react';
 
 const MOCK_GRAPH: GraphData = {
@@ -51,25 +52,34 @@ const MOCK_GRAPH: GraphData = {
 };
 
 interface KnowledgeGraphProps {
+  data?: GraphData;
   onNodeClick?: (node: GraphNode) => void;
 }
 
-export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
+export default function KnowledgeGraph({ data, onNodeClick }: KnowledgeGraphProps) {
+  const finalData = data || MOCK_GRAPH;
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [neighbors, setNeighbors] = useState<GraphNode[]>([]);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
   const getNeighborsWithLinks = (nodeId: string) => {
-    return MOCK_GRAPH.links
-      .filter(link => link.source === nodeId || link.target === nodeId)
+    return finalData.links
+      .filter(link => {
+        const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+        const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+        return sId === nodeId || tId === nodeId;
+      })
       .map(link => {
-        const neighborId = link.source === nodeId ? link.target : link.source;
-        const neighbor = MOCK_GRAPH.nodes.find(n => n.id === neighborId);
+        const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+        const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+        const neighborId = sId === nodeId ? tId : sId;
+        const neighbor = finalData.nodes.find(n => n.id === neighborId);
         return {
           ...neighbor!,
           connectionType: link.type
@@ -99,16 +109,46 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
     svg.call(zoom);
 
     // Initial simulation data
-    const nodes = MOCK_GRAPH.nodes.map(d => ({ ...d }));
-    const links = MOCK_GRAPH.links.map(d => ({ ...d }));
+    const nodes = finalData.nodes.map(d => ({ ...d }));
+    const links = finalData.links.map(d => ({ ...d }));
 
+    // Optimization: More aggressive alpha decay to cool down faster
     const simulation = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(links).id(d => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
+      .alphaDecay(0.05) // Settle faster
+      .force('link', d3.forceLink<GraphNode, GraphLink>(links)
+        .id(d => d.id)
+        .distance(link => {
+          // Dynamic distance based on link type
+          return link.type === 'citation' ? 120 : 80;
+        })
+        .strength(0.8)
+      )
+      .force('charge', d3.forceManyBody()
+        .strength(-400)
+        .distanceMax(400) // O(N^2) protection: ignore very distant nodes
+        .theta(1) // Barnes-Hut accuracy tradeoff for speed
+      )
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(d => (d as GraphNode).val + 10));
+      .force('collision', d3.forceCollide().radius(d => (d as GraphNode).val + 15))
+      // Clustering Forces: Pull nodes toward type-specific centroids
+      .force('x', d3.forceX(width / 2).strength(d => {
+        const node = d as GraphNode;
+        if (node.type === 'page') return 0.05;
+        if (node.type === 'tag') return 0.02;
+        return 0.1;
+      }))
+      .force('y', d3.forceY(height / 2).strength(d => {
+        const node = d as GraphNode;
+        if (node.type === 'page') return 0.05;
+        if (node.type === 'tag') return 0.02;
+        return 0.1;
+      }));
 
     simulationRef.current = simulation;
+
+    // Detection: If number of elements is too large, reduce DOM stress
+    const isLargeGraph = nodes.length > 50;
+    const strokeWidth = isLargeGraph ? 1 : 1.5;
 
     // Draw links
     const link = g.append('g')
@@ -117,8 +157,9 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       .enter()
       .append('line')
       .attr('stroke', '#E2E8F0')
-      .attr('stroke-width', 1.5)
-      .attr('stroke-opacity', 0.6);
+      .attr('stroke-width', strokeWidth)
+      .attr('stroke-opacity', 0.5)
+      .attr('class', 'pointer-events-none'); // Links don't need events
 
     // Draw nodes
     const node = g.append('g')
@@ -126,10 +167,10 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       .data(nodes)
       .enter()
       .append('g')
-      .attr('class', 'node')
+      .attr('class', 'node cursor-pointer')
       .call(d3.drag<SVGGElement, GraphNode>()
         .on('start', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
+          if (!event.active) simulation.alphaTarget(0.2).restart();
           d.fx = d.x;
           d.fy = d.y;
         })
@@ -145,19 +186,35 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       )
       .on('mouseenter', (event, d) => {
         setHoveredNode(d);
-        d3.select(event.currentTarget).select('circle').transition().duration(200).attr('r', d.val + 5);
+        // Only trigger heavy DOM transitions if node count is low
+        if (nodes.length < 100) {
+          d3.select(event.currentTarget).select('circle').transition().duration(200).attr('r', d.val + 5);
+        }
       })
       .on('mouseleave', (event, d) => {
         setHoveredNode(null);
-        d3.select(event.currentTarget).select('circle').transition().duration(200).attr('r', d.val);
+        if (nodes.length < 100) {
+          d3.select(event.currentTarget).select('circle').transition().duration(200).attr('r', d.val);
+        }
       })
       .on('click', (event, d) => {
         setSelectedNode(d);
         const neighborsWithTypes = getNeighborsWithLinks(d.id);
         setNeighbors(neighborsWithTypes as GraphNode[]);
+        
+        // Center view on clicked node
+        if (zoomRef.current && svgRef.current) {
+          const t = d3.zoomTransform(svgRef.current);
+          const x = width / 2 - d.x! * t.k;
+          const y = height / 2 - d.y! * t.k;
+          d3.select(svgRef.current).transition().duration(750).call(
+            zoomRef.current.transform, 
+            d3.zoomIdentity.translate(x, y).scale(t.k)
+          );
+        }
       });
 
-    // Node circles
+    // Node circles - Optimized shadows for large counts
     node.append('circle')
       .attr('r', d => d.val)
       .attr('fill', d => {
@@ -167,17 +224,18 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       })
       .attr('stroke', '#fff')
       .attr('stroke-width', 2)
-      .attr('class', 'shadow-sm');
+      .attr('class', isLargeGraph ? '' : 'filter drop-shadow-sm');
 
-    // Node labels
-    node.append('text')
+    // Only show labels for important nodes or if graph is small
+    const labelSelection = node.append('text')
       .attr('dy', d => d.val + 15)
       .attr('text-anchor', 'middle')
       .text(d => d.label)
-      .attr('class', 'text-[10px] font-bold fill-slate-600 pointer-events-none')
-      .style('text-shadow', '0 1px 2px rgba(255,255,255,0.8)');
+      .attr('class', 'text-[10px] font-bold fill-slate-500 pointer-events-none')
+      .style('display', d => (isLargeGraph && d.val < 15) ? 'none' : 'block');
 
     simulation.on('tick', () => {
+      // Direct property updates (faster than attr selection)
       link
         .attr('x1', d => (d.source as any).x)
         .attr('y1', d => (d.source as any).y)
@@ -185,6 +243,11 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
         .attr('y2', d => (d.target as any).y);
 
       node.attr('transform', d => `translate(${d.x},${d.y})`);
+      
+      // Stop rendering logic when alpha is extremely low
+      if (simulation.alpha() < 0.01) {
+        simulation.stop();
+      }
     });
 
     // Handle Resize
@@ -203,7 +266,7 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       simulation.stop();
       resizeObserver.disconnect();
     };
-  }, [onNodeClick]);
+  }, [finalData, onNodeClick]);
 
   const resetZoom = () => {
     if (!svgRef.current || !zoomRef.current) return;
@@ -271,38 +334,66 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 p-4 shadow-xl ring-1 ring-slate-900/5 transition-all hover:scale-[1.02]">
-        <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">图谱图例标识</div>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded-lg bg-blue-100 flex items-center justify-center">
-              <FileText className="h-4 w-4 text-blue-600" />
+      <AnimatePresence>
+        {showLegend && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="absolute bottom-6 left-6 bg-white/90 backdrop-blur-xl rounded-2xl border border-slate-200 p-4 shadow-xl ring-1 ring-slate-900/5 transition-all hover:scale-[1.02]"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">图谱图例标识</div>
+              <button 
+                onClick={() => setShowLegend(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                title="隐藏图例"
+              >
+                <X size={12} />
+              </button>
             </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">知识页面</span>
-              <span className="text-[9px] font-bold text-slate-400">核心文档节点</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-7 w-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">知识页面</span>
+                  <span className="text-[9px] font-bold text-slate-400">核心文档节点</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-7 w-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <Hash className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">关联标签</span>
+                  <span className="text-[9px] font-bold text-slate-400">语义分类维度</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-7 w-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <User className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">主要作者</span>
+                  <span className="text-[9px] font-bold text-slate-400">内容贡献主体</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <Hash className="h-4 w-4 text-emerald-600" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">关联标签</span>
-              <span className="text-[9px] font-bold text-slate-400">语义分类维度</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded-lg bg-amber-100 flex items-center justify-center">
-              <User className="h-4 w-4 text-amber-600" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">主要作者</span>
-              <span className="text-[9px] font-bold text-slate-400">内容贡献主体</span>
-            </div>
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!showLegend && (
+        <button 
+          onClick={() => setShowLegend(true)}
+          className="absolute bottom-6 left-6 p-3 bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200 shadow-lg text-slate-400 hover:text-blue-600 transition-all hover:scale-110"
+          title="显示图例"
+        >
+          <Zap className="h-4 w-4" />
+        </button>
+      )}
 
       {/* Info Panel Overlay */}
       <AnimatePresence>

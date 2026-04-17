@@ -41,11 +41,20 @@ function initDb() {
         FOREIGN KEY(tag_id) REFERENCES tags(id)
       );
 
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        date TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS chat_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
       );
     `);
     console.log('Database tables verified/created.');
@@ -120,7 +129,13 @@ async function startServer() {
 
     app.get('/api/chat', (req, res) => {
       try {
-        const messages = db.prepare('SELECT * FROM chat_history ORDER BY created_at ASC').all();
+        const { sessionId } = req.query;
+        let messages;
+        if (sessionId) {
+          messages = db.prepare('SELECT * FROM chat_history WHERE session_id = ? ORDER BY created_at ASC').all(sessionId);
+        } else {
+          messages = db.prepare('SELECT * FROM chat_history ORDER BY created_at ASC').all();
+        }
         res.json(messages);
       } catch (e) {
         console.error('Failed to get chat:', e);
@@ -130,12 +145,44 @@ async function startServer() {
 
     app.post('/api/chat', (req, res) => {
       try {
-        const { role, content } = req.body;
-        const result = db.prepare('INSERT INTO chat_history (role, content) VALUES (?, ?)').run(role, content);
+        const { role, content, sessionId } = req.body;
+        const result = db.prepare('INSERT INTO chat_history (role, content, session_id) VALUES (?, ?, ?)').run(role, content, sessionId || null);
         res.json({ status: 'success', id: result.lastInsertRowid });
       } catch (e) {
         console.error('Failed to save chat:', e);
         res.status(500).json({ error: 'Failed to save chat log' });
+      }
+    });
+
+    app.get('/api/chat/sessions', (req, res) => {
+      try {
+        const sessions = db.prepare('SELECT * FROM chat_sessions ORDER BY created_at DESC').all();
+        res.json(sessions);
+      } catch (e) {
+        console.error('Failed to fetch sessions:', e);
+        res.status(500).json({ error: 'Failed to fetch chat sessions' });
+      }
+    });
+
+    app.post('/api/chat/sessions', (req, res) => {
+      try {
+        const { id, title, date } = req.body;
+        db.prepare('INSERT OR REPLACE INTO chat_sessions (id, title, date) VALUES (?, ?, ?)').run(id, title, date);
+        res.json({ status: 'success', id });
+      } catch (e) {
+        console.error('Failed to save session:', e);
+        res.status(500).json({ error: 'Failed to save chat session' });
+      }
+    });
+
+    app.delete('/api/chat/sessions/:id', (req, res) => {
+      try {
+        const { id } = req.params;
+        db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(id);
+        res.json({ status: 'success' });
+      } catch (e) {
+        console.error('Failed to delete session:', e);
+        res.status(500).json({ error: 'Failed to delete session' });
       }
     });
 

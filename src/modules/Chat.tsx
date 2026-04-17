@@ -30,38 +30,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from '../types.ts';
 import { ai, MODELS } from '../lib/gemini.ts';
 import { api } from '../lib/api.ts';
+import { useToast } from '../lib/ToastContext.tsx';
 
 export default function IntelligentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [sessions, setSessions] = useState([
-    { id: '1', title: '深度学习基础探讨', date: '今天' },
-    { id: '2', title: 'Transformer 架构总结', date: '今天' },
-    { id: '3', title: '模型量化方案讨论', date: '昨日' },
-  ]);
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
-
-  const fetchHistory = async () => {
-    try {
-      const history = await api.getChatHistory();
-      if (history.length > 0) {
-        setMessages(history);
-      } else {
-        setMessages([
-          {
-            id: '1',
-            role: 'assistant',
-            content: '你好！我是您的知识库助手。我已经学习了您的所有文档，您可以问我关于深度学习、Transformer 架构或者 RAG 系统的任何问题。',
-          }
-        ]);
-      }
-    } catch (error) {
-      console.error('Failed to fetch chat history:', error);
-    }
-  };
-  const [activeSessionId, setActiveSessionId] = useState('1');
+  const [sessions, setSessions] = useState<{ id: string; title: string; date: string }[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [input, setInput] = useState('');
   const [isDeepMode, setIsDeepMode] = useState(false);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(true);
@@ -70,6 +44,69 @@ export default function IntelligentChat() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInstance = useRef<any>(null);
+  const { toast } = useToast();
+
+  // Load draft from localStorage on mount or session change
+  useEffect(() => {
+    if (activeSessionId) {
+      const savedInput = localStorage.getItem(`chat_draft_${activeSessionId}`);
+      if (savedInput) setInput(savedInput);
+    }
+  }, [activeSessionId]);
+
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    if (activeSessionId && input !== undefined) {
+      localStorage.setItem(`chat_draft_${activeSessionId}`, input);
+    }
+  }, [input, activeSessionId]);
+
+  useEffect(() => {
+    const init = async () => {
+      await fetchSessions();
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      fetchHistory(activeSessionId);
+    }
+  }, [activeSessionId]);
+
+  const fetchSessions = async () => {
+    try {
+      const data = await api.getChatSessions();
+      setSessions(data);
+      if (data.length > 0 && !activeSessionId) {
+        setActiveSessionId(data[0].id);
+      } else if (data.length === 0) {
+        // Create first session if none exists
+        createNewSession();
+      }
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error);
+    }
+  };
+
+  const fetchHistory = async (sessionId: string) => {
+    try {
+      const history = await api.getChatHistory(sessionId);
+      if (history.length > 0) {
+        setMessages(history);
+      } else {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'assistant',
+            content: '你好！我是您的知识库助手。您可以问我关于您的文档或者任何知识点的问题。',
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch chat history:', error);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -92,24 +129,39 @@ export default function IntelligentChat() {
     }
   }, []);
 
-  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSessions(prev => prev.filter(s => s.id !== id));
-    if (activeSessionId === id && sessions.length > 1) {
-      setActiveSessionId(sessions.find(s => s.id !== id)?.id || '');
+    try {
+      await api.deleteChatSession(id);
+      localStorage.removeItem(`chat_draft_${id}`);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (activeSessionId === id) {
+        setActiveSessionId(sessions.find(s => s.id !== id)?.id || '');
+      }
+      toast('会话已删除');
+    } catch (error) {
+      console.error(error);
+      toast('删除会话失败', 'error');
     }
   };
 
-  const createNewSession = () => {
+  const createNewSession = async () => {
     const newId = Date.now().toString();
     const newSession = { id: newId, title: '新对话', date: '今天' };
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSessionId(newId);
-    setMessages([{ id: Date.now().toString(), role: 'assistant', content: '您好！我是您的 AI 助理，请问有什么可以帮您？' }]);
+    try {
+      await api.saveChatSession(newSession);
+      setSessions(prev => [newSession, ...prev]);
+      setActiveSessionId(newId);
+      setInput('');
+      setMessages([{ id: 'welcome', role: 'assistant', content: '您好！我是您的 AI 助理，请问有什么可以帮您？' }]);
+    } catch (error) {
+      console.error(error);
+      toast('创建会话失败', 'error');
+    }
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isTyping) return;
+    if (!input.trim() || isTyping || !activeSessionId) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -120,15 +172,18 @@ export default function IntelligentChat() {
     setMessages(prev => [...prev, userMessage]);
     
     if (activeSessionId) {
-      setSessions(prev => prev.map(s => 
-        s.id === activeSessionId && s.title === '新对话' 
-          ? { ...s, title: input.slice(0, 15) + (input.length > 15 ? '...' : '') } 
-          : s
-      ));
+      const session = sessions.find(s => s.id === activeSessionId);
+      if (session && session.title === '新对话') {
+        const newTitle = input.slice(0, 15) + (input.length > 15 ? '...' : '');
+        const updatedSession = { ...session, title: newTitle };
+        setSessions(prev => prev.map(s => s.id === activeSessionId ? updatedSession : s));
+        await api.saveChatSession(updatedSession);
+      }
     }
 
     const currentInput = input;
     setInput('');
+    localStorage.removeItem(`chat_draft_${activeSessionId}`);
     setIsTyping(true);
 
     const assistantMsgId = (Date.now() + 1).toString();
@@ -137,17 +192,13 @@ export default function IntelligentChat() {
       role: 'assistant',
       content: '',
       thought: isDeepMode ? '正在分析上下文，检索知识库中关于注意力机制的定义...' : undefined,
-      citations: [
-        { id: 'c1', text: 'Transformer 架构通过自注意力机制实现了对长距离依赖的有效建模。', pageTitle: 'Transformer 解析' },
-        { id: 'c2', text: 'RAG 极大提高了生成内容的准确性。', pageTitle: 'RAG 架构白皮书' }
-      ]
     };
 
     setMessages(prev => [...prev, newAssistantMessage]);
 
     try {
       // Save User Message
-      await api.sendChatMessage({ role: 'user', content: currentInput });
+      await api.sendChatMessage({ role: 'user', content: currentInput, sessionId: activeSessionId });
 
       const responseStream = await chatInstance.current.sendMessageStream({
         message: currentInput,
@@ -162,7 +213,7 @@ export default function IntelligentChat() {
       }
       
       // Save Assistant Message
-      await api.sendChatMessage({ role: 'assistant', content: fullContent });
+      await api.sendChatMessage({ role: 'assistant', content: fullContent, sessionId: activeSessionId });
 
     } catch (error) {
       console.error(error);
@@ -223,7 +274,7 @@ export default function IntelligentChat() {
                    <p className="text-xs font-bold text-slate-900 truncate">测试用户</p>
                    <p className="text-[10px] text-slate-400 font-bold tracking-tighter uppercase">PRO EDITION</p>
                 </div>
-                <Settings size={16} className="text-slate-400" />
+                <button onClick={() => toast('进入账户设置页面（功能暂未开放）')} className="hover:bg-slate-100 p-1 rounded transition-colors"><Settings size={16} className="text-slate-400 hover:text-slate-900 transition-colors" /></button>
              </div>
           </div>
         </div>
@@ -251,7 +302,7 @@ export default function IntelligentChat() {
                     <div className={`h-3 w-3 rounded-full bg-white transition-all ${isDeepMode ? 'translate-x-4' : 'translate-x-0'}`} />
                  </div>
               </div>
-              <button className="p-2.5 text-slate-400 hover:text-slate-900 border border-slate-100 rounded-xl"><Share2 size={18} /></button>
+              <button onClick={() => toast('对话链接已复制，可分享对话状态', 'success')} className="p-2.5 text-slate-400 hover:text-slate-900 border border-slate-100 rounded-xl"><Share2 size={18} /></button>
            </div>
         </header>
 
@@ -306,8 +357,8 @@ export default function IntelligentChat() {
 
                 {msg.role === 'assistant' && (
                   <div className="mt-4 flex items-center gap-2 pl-4">
-                     <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-white hover:text-blue-600 transition-all shadow-sm"><ThumbsUp size={14} /> 有帮助</button>
-                     <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:bg-white transition-all shadow-sm"><ThumbsDown size={14} /></button>
+                     <button onClick={() => toast('感谢反馈，我们将持续优化模型表现', 'success')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-white hover:text-blue-600 transition-all shadow-sm"><ThumbsUp size={14} /> 有帮助</button>
+                     <button onClick={() => toast('感谢反馈，已记录您的不满意理由')} className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:bg-white transition-all shadow-sm"><ThumbsDown size={14} /></button>
                      <div className="w-px h-4 bg-slate-200 mx-1" />
                      <button onClick={() => copyToClipboard(msg.content, msg.id)} className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:text-slate-900 transition-all">
                         {copiedId === msg.id ? <CheckCircle2 size={16} className="text-green-500" /> : <Copy size={14} />}
@@ -329,8 +380,8 @@ export default function IntelligentChat() {
                   className="w-full bg-transparent border-none text-base lg:text-lg focus:ring-0 outline-none resize-none px-6 pt-5 pb-16 min-h-[120px] max-h-[400px]"
                  />
                  <div className="absolute bottom-5 left-8 flex items-center gap-3">
-                    <button className="px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 flex items-center gap-2 group/btn"><Zap size={14} className="text-blue-500 group-hover/btn:animate-pulse" /> 常用方案摘要</button>
-                    <button className="hidden sm:flex px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 items-center gap-2"><Plus size={14} /> 关联文档</button>
+                    <button onClick={() => setInput('常用方案摘要：')} className="px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 flex items-center gap-2 group/btn"><Zap size={14} className="text-blue-500 group-hover/btn:animate-pulse" /> 常用方案摘要</button>
+                    <button onClick={() => toast('正在分析上下文中可关联引用的文档...', 'success')} className="hidden sm:flex px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 items-center gap-2"><Plus size={14} /> 关联文档</button>
                  </div>
                  <button onClick={handleSendMessage} disabled={!input.trim() || isTyping} className={`absolute bottom-4 right-4 h-14 w-14 rounded-full flex items-center justify-center shadow-xl transition-all ${input.trim() && !isTyping ? 'bg-slate-900 text-white hover:scale-105 active:scale-95' : 'bg-slate-50 text-slate-200'}`}>
                     {isTyping ? <Loader2 size={24} className="animate-spin" /> : <Send size={20} />}

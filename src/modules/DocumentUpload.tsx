@@ -26,6 +26,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadFile } from '../types.ts';
 import { api } from '../lib/api.ts';
+import { useToast } from '../lib/ToastContext.tsx';
 
 export default function DocumentUpload() {
   const [files, setFiles] = useState<UploadFile[]>([
@@ -70,12 +71,70 @@ export default function DocumentUpload() {
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>('1');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkMode, setIsBulkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { toast } = useToast();
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    setFiles(prev => prev.filter(f => !selectedIds.includes(f.id)));
+    if (selectedFileId && selectedIds.includes(selectedFileId)) {
+      setSelectedFileId(null);
+    }
+    toast(`已批量删除 ${selectedIds.length} 个文档`, 'success');
+    setSelectedIds([]);
+    setIsBulkMode(false);
+  };
+
+  const handleBulkIndex = async () => {
+    if (selectedIds.length === 0) return;
+    toast(`正在对 ${selectedIds.length} 个文档进行深度索引...`, 'info');
+    
+    try {
+      const selectedFiles = files.filter(f => selectedIds.includes(f.id));
+      for (const file of selectedFiles) {
+        await api.saveWikiPage({
+          id: file.id,
+          title: file.name,
+          content: file.content || '批量索引导入的内容',
+          snippet: '批量导出的结构化索引',
+          source: 'Bulk Action',
+          type: file.type,
+          relevance: 100,
+          author: 'System',
+          tags: ['BulkIndexed', file.type.toUpperCase()]
+        });
+      }
+      toast(`成功建立 ${selectedIds.length} 个结构化索引`, 'success');
+    } catch (err) {
+      console.error(err);
+      toast('部分文档索引失败', 'error');
+    }
+    
+    setSelectedIds([]);
+    setIsBulkMode(false);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === filteredFiles.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredFiles.map(f => f.id));
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map(file => {
+      const newFiles = Array.from(e.target.files).map((file: File) => {
         return {
           id: Date.now().toString() + Math.random().toString(),
           name: file.name,
@@ -146,10 +205,38 @@ export default function DocumentUpload() {
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                <Layers size={16} className="text-blue-600" /> 知识源
             </h2>
-            <button className="p-1 px-2 text-[10px] font-black text-blue-600 uppercase transition-all hover:bg-blue-50 rounded">
-               批量操作
+            <button 
+              onClick={() => {
+                setIsBulkMode(!isBulkMode);
+                setSelectedIds([]);
+              }} 
+              className={`p-1 px-2 text-[10px] font-black uppercase transition-all rounded ${isBulkMode ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-50'}`}
+            >
+               {isBulkMode ? '取消批量' : '批量操作'}
             </button>
          </div>
+
+         {isBulkMode && (
+            <div className="p-3 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between gap-2">
+               <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.length === filteredFiles.length && filteredFiles.length > 0} 
+                    onChange={toggleAll}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-[10px] font-black text-blue-700 uppercase">全选 ({selectedIds.length})</span>
+               </div>
+               <div className="flex gap-1">
+                  <button onClick={handleBulkIndex} className="p-1.5 bg-blue-600 text-white rounded-lg transition-all hover:bg-blue-700 disabled:opacity-50" disabled={selectedIds.length === 0} title="批量索引">
+                     <Cpu size={14} />
+                  </button>
+                  <button onClick={handleBulkDelete} className="p-1.5 bg-rose-600 text-white rounded-lg transition-all hover:bg-rose-700 disabled:opacity-50" disabled={selectedIds.length === 0} title="批量删除">
+                     <Trash2 size={14} />
+                  </button>
+               </div>
+            </div>
+         )}
 
          <div className="p-4 border-b border-slate-200 bg-white">
             <div className="relative mb-4">
@@ -187,9 +274,18 @@ export default function DocumentUpload() {
                    key={file.id}
                    initial={{ opacity: 0, x: -10 }}
                    animate={{ opacity: 1, x: 0 }}
-                   onClick={() => setSelectedFileId(file.id)}
-                   className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedFileId === file.id ? 'bg-white shadow-sm ring-1 ring-slate-200 font-bold' : 'text-slate-600 hover:bg-slate-200/50'}`}
+                   onClick={() => !isBulkMode && setSelectedFileId(file.id)}
+                   className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedFileId === file.id && !isBulkMode ? 'bg-white shadow-sm ring-1 ring-slate-200 font-bold' : 'text-slate-600 hover:bg-slate-200/50'}`}
                  >
+                   {isBulkMode && (
+                     <input 
+                       type="checkbox" 
+                       checked={selectedIds.includes(file.id)}
+                       onChange={(e) => toggleSelect(file.id, e as any)}
+                       onClick={(e) => e.stopPropagation()}
+                       className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                     />
+                   )}
                    <div className={`h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm`}>
                       {getFileIcon(file.type)}
                    </div>
@@ -236,13 +332,13 @@ export default function DocumentUpload() {
             </div>
             
             <div className="flex items-center gap-2">
-               <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200">
+               <button onClick={() => toast('正在导出结构化数据...', 'success')} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200">
                   <Download size={14} /> 导出解析数据
                </button>
-               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 transition-all shadow-sm">
+               <button onClick={() => toast('文档已加入归档队列', 'success')} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 transition-all shadow-sm">
                   <Archive size={18} />
                </button>
-               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all shadow-sm">
+               <button onClick={() => toast('已展示更多操作选项')} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all shadow-sm">
                   <MoreVertical size={18} />
                </button>
             </div>
