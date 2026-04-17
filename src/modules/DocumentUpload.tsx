@@ -13,7 +13,15 @@ import {
   Type,
   ExternalLink,
   ChevronRight,
-  Search
+  Search,
+  List,
+  Filter,
+  MoreVertical,
+  Download,
+  Info,
+  Layers,
+  Archive,
+  Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadFile } from '../types.ts';
@@ -61,6 +69,7 @@ export default function DocumentUpload() {
 
   const [selectedFileId, setSelectedFileId] = useState<string | null>('1');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const filteredFiles = useMemo(() => {
     return files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -87,204 +96,177 @@ export default function DocumentUpload() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-160px)] flex-col gap-6">
-      {/* Header & Compact Upload */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">文档管理</h1>
-          <p className="text-sm text-slate-500">上传并查看您的知识源文件</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-slate-400" />
+    <div className="flex h-full bg-white relative overflow-hidden">
+      {/* Knowledge Source Sidebar */}
+      <aside className={`
+        ${isSidebarOpen ? 'w-80' : 'w-0'} 
+        flex flex-col border-r border-slate-200 bg-slate-50/50 transition-all duration-300 overflow-hidden shrink-0
+      `}>
+         <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+               <Layers size={16} className="text-blue-600" /> 知识源
+            </h2>
+            <button className="p-1 px-2 text-[10px] font-black text-blue-600 uppercase transition-all hover:bg-blue-50 rounded">
+               批量操作
+            </button>
+         </div>
+
+         <div className="p-4 border-b border-slate-200 bg-white">
+            <div className="relative mb-4">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+               <input 
+                type="text" 
+                placeholder="搜索文档库..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+               />
             </div>
-            <input 
-              type="text"
-              placeholder="搜索文档..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 w-64 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            />
-          </div>
-          
-          <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95">
-            <UploadCloud className="h-4 w-4" />
-            <span>上传文件</span>
-          </button>
-        </div>
-      </div>
+            <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-lg shadow-slate-200 hover:bg-blue-600 transition-all">
+               <UploadCloud size={14} /> 导入新文档
+            </button>
+         </div>
 
-      {/* Main Split View */}
-      <div className="flex flex-1 gap-6 overflow-hidden min-h-0">
-        {/* Left Sidebar: File List */}
-        <div className="w-80 flex flex-col gap-4 overflow-hidden shrink-0">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">上传队列 ({filteredFiles.length})</span>
-            {files.some(f => f.status === 'success') && (
-              <button 
-                onClick={() => setFiles(files.filter(f => f.status !== 'success'))}
-                className="text-xs text-blue-600 hover:underline font-medium"
-              >
-                清空完成
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+         <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+            <div className="flex items-center justify-between px-2 mb-2">
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">最近上传 ({filteredFiles.length})</span>
+               <Filter size={12} className="text-slate-400" />
+            </div>
             <AnimatePresence mode="popLayout">
-              {filteredFiles.map((file) => (
-                <motion.div
-                  layout
-                  key={file.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  onClick={() => setSelectedFileId(file.id)}
-                  className={`group relative flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
-                    selectedFileId === file.id 
-                    ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
-                    : 'border-slate-100 bg-white hover:border-blue-200 hover:shadow-sm'
-                  }`}
-                >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    file.type === 'pdf' ? 'bg-red-50' :
-                    file.type === 'doc' ? 'bg-blue-50' :
-                    file.type === 'image' ? 'bg-purple-50' : 'bg-slate-50'
-                  }`}>
-                    {getFileIcon(file.type)}
-                  </div>
-
-                  <div className="flex flex-1 flex-col min-w-0">
-                    <span className="truncate text-sm font-semibold text-slate-900">{file.name}</span>
-                    <span className="text-[10px] text-slate-400">{file.size} • {file.type.toUpperCase()}</span>
-                  </div>
-
-                  {file.status === 'success' ? (
-                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin shrink-0" />
-                  )}
-
-                  <button 
-                    onClick={(e) => removeFile(file.id, e)}
-                    className="absolute -right-2 -top-2 rounded-full bg-white border border-slate-200 p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-50 hover:text-red-500"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </motion.div>
-              ))}
+               {filteredFiles.map((file) => (
+                 <motion.div
+                   layout
+                   key={file.id}
+                   initial={{ opacity: 0, x: -10 }}
+                   animate={{ opacity: 1, x: 0 }}
+                   onClick={() => setSelectedFileId(file.id)}
+                   className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedFileId === file.id ? 'bg-white shadow-sm ring-1 ring-slate-200 font-bold' : 'text-slate-600 hover:bg-slate-200/50'}`}
+                 >
+                   <div className={`h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-100 shadow-sm`}>
+                      {getFileIcon(file.type)}
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate text-slate-900">{file.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{file.size} • {file.type}</p>
+                   </div>
+                   <button onClick={(e) => removeFile(file.id, e)} className="p-1.5 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded transition-all">
+                      <X size={12} />
+                   </button>
+                 </motion.div>
+               ))}
             </AnimatePresence>
+         </div>
 
-            {filteredFiles.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                <FileText className="h-8 w-8 opacity-20 mb-2" />
-                <p className="text-xs">未找到匹配文档</p>
-              </div>
+         <div className="p-4 border-t border-slate-200 bg-white/50 space-y-3">
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+               <div className="flex items-center gap-2 mb-2">
+                  <Info size={12} className="text-blue-500" />
+                  <span className="text-[10px] font-black text-blue-700 uppercase tracking-tighter">知识库容量</span>
+               </div>
+               <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 w-[65%]" />
+               </div>
+               <p className="mt-2 text-[10px] text-slate-500 font-medium">12.4GB / 20.0GB 已用</p>
+            </div>
+         </div>
+      </aside>
+
+      {/* Content Area */}
+      <main className="flex-1 flex flex-col bg-white overflow-hidden relative">
+         <header className="h-16 border-b border-slate-100 px-6 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+            <div className="flex items-center gap-4">
+               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 -ml-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all">
+                  <List size={20} />
+               </button>
+               <div>
+                  <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight">文档详情与预览</h1>
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                     <span>存储空间: Cloud A1</span>
+                     <span className="text-blue-500">已索引</span>
+                  </div>
+               </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+               <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200">
+                  <Download size={14} /> 导出解析数据
+               </button>
+               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 transition-all shadow-sm">
+                  <Archive size={18} />
+               </button>
+               <button className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-slate-900 transition-all shadow-sm">
+                  <MoreVertical size={18} />
+               </button>
+            </div>
+         </header>
+
+         <div className="flex-1 overflow-y-auto bg-slate-50/30 custom-scrollbar">
+            {selectedFile ? (
+               <div className="max-w-4xl mx-auto p-12">
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-[32px] border border-slate-200 shadow-2xl p-10 min-h-[800px] flex flex-col relative overflow-hidden"
+                  >
+                     {/* Decorative background for file icons */}
+                     <div className="absolute top-0 right-0 p-8 opacity-5">
+                        <FileText size={120} />
+                     </div>
+
+                     <div className="flex items-center gap-5 border-b border-slate-100 pb-8 mb-10">
+                        <div className="h-16 w-16 rounded-[20px] bg-slate-50 flex items-center justify-center text-slate-800 border border-slate-200 shadow-sm">
+                           {getFileIcon(selectedFile.type)}
+                        </div>
+                        <div>
+                           <h2 className="text-xl font-black text-slate-900 tracking-tight">{selectedFile.name}</h2>
+                           <div className="flex items-center gap-4 mt-2">
+                              <span className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase"><Info size={12} /> {selectedFile.size}</span>
+                              <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full ring-1 ring-emerald-100">已完成多维度解析</span>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="flex-1 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-p:text-slate-600 prose-p:leading-relaxed">
+                        {selectedFile.type === 'image' ? (
+                           <div className="w-full flex flex-col gap-6">
+                              <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-2xl ring-4 ring-slate-100 transition-transform active:scale-[0.98]">
+                                 <img src={selectedFile.previewUrl} alt="Preview" className="w-full h-auto object-contain max-h-[600px] my-0" />
+                              </div>
+                              <div className="bg-slate-900 rounded-2xl p-6 text-white overflow-x-auto">
+                                 <div className="flex items-center gap-3 mb-4">
+                                    <Cpu size={14} className="text-blue-400" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">OCR & 视觉大模型解析结果</span>
+                                 </div>
+                                 <p className="text-sm font-medium leading-relaxed italic opacity-80">
+                                    这是一个包含了知识库架构示意图的图像。图像中心展示了核心的向量检索引擎，左侧是多种非结构化数据源的输入接口，右侧则是通过 RAG 架构支撑的智能问答终端。图中标识了实时流处理与全量批处理两条数据链路。
+                                 </p>
+                              </div>
+                           </div>
+                        ) : (
+                           <div className="whitespace-pre-wrap font-sans text-slate-700 text-lg leading-[2]">
+                              {selectedFile.content || '该文档暂无内容预览'}
+                           </div>
+                        )}
+                     </div>
+
+                     <div className="mt-16 pt-8 border-t border-slate-100 grid grid-cols-3 gap-6">
+                        {['关联实体', '引用次数', '提取关键词'].map(label => (
+                           <div key={label} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+                              <p className="text-sm font-bold text-slate-900">{label === '关联实体' ? '12 个' : label === '引用次数' ? '86 次' : 'Transformer, AI, RAG'}</p>
+                           </div>
+                        ))}
+                     </div>
+                  </motion.div>
+               </div>
+            ) : (
+               <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <Archive size={48} className="opacity-10 mb-4" />
+                  <p className="text-sm font-bold uppercase tracking-widest opacity-30">选择文档进行深度内容核查</p>
+               </div>
             )}
-          </div>
-
-          {/* Compact Drop Area */}
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 p-4 transition-colors hover:border-blue-400 hover:bg-blue-50/30">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <UploadCloud className="h-6 w-6 text-slate-400" />
-              <div className="text-[11px] text-slate-500">
-                <span className="font-bold text-blue-600 cursor-pointer">点击上传</span> 或拖拽到这里
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Pane: Content Viewer */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          {selectedFile ? (
-            <>
-              {/* Toolbar */}
-              <div className="h-14 shrink-0 border-b border-slate-100 flex items-center justify-between px-6 bg-slate-50/50">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-1.5 bg-white rounded-lg border border-slate-200 shadow-sm">
-                    {getFileIcon(selectedFile.type)}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-bold text-slate-900 truncate">{selectedFile.name}</h2>
-                    <p className="text-[10px] text-slate-500">大小: {selectedFile.size} • 格式: {selectedFile.type.toUpperCase()}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm border border-transparent hover:border-slate-100">
-                    <ExternalLink className="h-4 w-4" />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm border border-transparent hover:border-slate-100">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Viewer Area */}
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/30">
-                <div className="max-w-3xl mx-auto">
-                  {selectedFile.type === 'image' ? (
-                    <div className="space-y-4">
-                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-200/50">
-                        <img 
-                          src={selectedFile.previewUrl} 
-                          alt={selectedFile.name} 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-auto object-contain max-h-[600px]"
-                        />
-                      </div>
-                      <div className="p-4 rounded-xl bg-slate-100/50 border border-slate-200 text-xs text-slate-500 italic text-center">
-                        图像预览: {selectedFile.name}
-                      </div>
-                    </div>
-                  ) : selectedFile.type === 'pdf' ? (
-                    <div className="space-y-6">
-                      <div className="aspect-[1/1.414] w-full rounded-xl border border-slate-200 bg-white shadow-lg p-12 flex flex-col gap-6">
-                        <div className="space-y-4">
-                          <div className="h-8 w-2/3 bg-slate-100 rounded animate-pulse" />
-                          <div className="h-4 w-full bg-slate-50 rounded" />
-                          <div className="h-4 w-full bg-slate-50 rounded" />
-                          <div className="h-4 w-5/6 bg-slate-50 rounded" />
-                        </div>
-                        <div className="flex-1 border-t border-slate-100 pt-6 prose prose-slate prose-sm max-w-none">
-                          <div className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed">
-                            {selectedFile.content}
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-center text-[11px] text-slate-400">PDF 内容解析摘要</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-slate-200 bg-white shadow-md">
-                      <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-2">
-                        <Type className="h-4 w-4 text-slate-400" />
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Document Content</span>
-                      </div>
-                      <div className="p-10 prose prose-slate max-w-none">
-                        <div className="whitespace-pre-wrap font-sans text-slate-700 leading-relaxed">
-                          {selectedFile.content || '该文档暂无内容预览'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4">
-              <div className="h-16 w-16 rounded-3xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-inner">
-                <Eye className="h-8 w-8 opacity-20" />
-              </div>
-              <div className="text-center">
-                <h3 className="font-semibold text-slate-600">选择一个文件进行预览</h3>
-                <p className="text-xs mt-1">从左侧列表中选择文档查看其解析内容</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+         </div>
+      </main>
     </div>
   );
 }
-

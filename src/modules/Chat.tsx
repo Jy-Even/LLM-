@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, 
   Plus, 
@@ -9,6 +9,7 @@ import {
   Copy, 
   Share2, 
   Maximize2,
+  Trash2,
   ChevronDown,
   Sparkles,
   Command,
@@ -20,7 +21,10 @@ import {
   Cpu,
   Fingerprint,
   Activity,
-  CheckCircle2
+  CheckCircle2,
+  User,
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from '../types.ts';
@@ -34,6 +38,12 @@ export default function IntelligentChat() {
       content: '你好！我是您的知识库助手。我已经学习了您的所有文档，您可以问我关于深度学习、Transformer 架构或者 RAG 系统的任何问题。',
     }
   ]);
+  const [sessions, setSessions] = useState([
+    { id: '1', title: '深度学习基础探讨', date: '今天' },
+    { id: '2', title: 'Transformer 架构总结', date: '今天' },
+    { id: '3', title: '模型量化方案讨论', date: '昨日' },
+  ]);
+  const [activeSessionId, setActiveSessionId] = useState('1');
   const [input, setInput] = useState('');
   const [isDeepMode, setIsDeepMode] = useState(false);
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(true);
@@ -49,22 +59,36 @@ export default function IntelligentChat() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Initialize chat session
   useEffect(() => {
     if (!chatInstance.current) {
       chatInstance.current = ai.chats.create({
         model: MODELS.flash,
         config: {
-          systemInstruction: "你是一个专业的知识库助手，擅长分析文档、回答深度学习相关问题。你的回答应当专业、准确，并尽量引用背景知识。",
+          systemInstruction: "你是一个专业的知识库助手。你的回答应当专业、准确，并尽量引用背景知识。",
         }
       });
     }
   }, []);
+
+  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (activeSessionId === id && sessions.length > 1) {
+      setActiveSessionId(sessions.find(s => s.id !== id)?.id || '');
+    }
+  };
+
+  const createNewSession = () => {
+    const newId = Date.now().toString();
+    const newSession = { id: newId, title: '新对话', date: '今天' };
+    setSessions(prev => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    setMessages([{ id: Date.now().toString(), role: 'assistant', content: '您好！我是您的 AI 助理，请问有什么可以帮您？' }]);
+  };
 
   const handleSendMessage = async () => {
     if (!input.trim() || isTyping) return;
@@ -76,6 +100,15 @@ export default function IntelligentChat() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    
+    if (activeSessionId) {
+      setSessions(prev => prev.map(s => 
+        s.id === activeSessionId && s.title === '新对话' 
+          ? { ...s, title: input.slice(0, 15) + (input.length > 15 ? '...' : '') } 
+          : s
+      ));
+    }
+
     const currentInput = input;
     setInput('');
     setIsTyping(true);
@@ -85,7 +118,11 @@ export default function IntelligentChat() {
       id: assistantMsgId,
       role: 'assistant',
       content: '',
-      thought: isDeepMode ? '正在检索知识库并思考最佳回答...' : undefined,
+      thought: isDeepMode ? '正在分析上下文，检索知识库中关于注意力机制的定义...' : undefined,
+      citations: [
+        { id: 'c1', text: 'Transformer 架构通过自注意力机制实现了对长距离依赖的有效建模。', pageTitle: 'Transformer 解析' },
+        { id: 'c2', text: 'RAG 极大提高了生成内容的准确性。', pageTitle: 'RAG 架构白皮书' }
+      ]
     };
 
     setMessages(prev => [...prev, newAssistantMessage]);
@@ -97,21 +134,15 @@ export default function IntelligentChat() {
 
       let fullContent = '';
       for await (const chunk of responseStream) {
-        const text = chunk.text;
-        fullContent += text;
-        
+        fullContent += chunk.text;
         setMessages(prev => prev.map(msg => 
-          msg.id === assistantMsgId 
-            ? { ...msg, content: fullContent } 
-            : msg
+          msg.id === assistantMsgId ? { ...msg, content: fullContent } : msg
         ));
       }
     } catch (error) {
-      console.error("Streaming error:", error);
+      console.error(error);
       setMessages(prev => prev.map(msg => 
-        msg.id === assistantMsgId 
-          ? { ...msg, content: '抱歉，生成回复时出错了。请重试。' } 
-          : msg
+        msg.id === assistantMsgId ? { ...msg, content: '抱歉，服务暂时繁忙。' } : msg
       ));
     } finally {
       setIsTyping(false);
@@ -119,236 +150,169 @@ export default function IntelligentChat() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] gap-6 relative">
-      {/* Session History Sidebar */}
-      <div className={`
-        fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm lg:static lg:bg-transparent lg:backdrop-blur-none lg:z-0
+    <div className="flex h-full bg-white relative overflow-hidden">
+      {/* History Sidebar */}
+      <aside className={`
+        fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm lg:static lg:bg-slate-50 lg:backdrop-blur-none lg:z-0
         transition-opacity duration-300
-        ${isSidebarOpen ? 'opacity-100 visible' : 'opacity-0 invisible lg:visible'}
+        ${isSidebarOpen ? 'opacity-100 visible' : 'opacity-0 invisible lg:visible lg:flex lg:w-72 lg:shrink-0'}
       `} onClick={() => setIsSidebarOpen(false)}>
         <div className={`
-          absolute left-0 top-0 bottom-0 w-64 flex flex-col bg-white border-r border-slate-200 lg:rounded-2xl lg:border lg:shadow-sm overflow-hidden
+          absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-slate-50 border-r border-slate-200
           transition-transform duration-300
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `} onClick={e => e.stopPropagation()}>
-          <div className="p-4 border-b border-slate-100">
-             <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-hover hover:bg-slate-800 active:scale-95">
-               <Plus className="h-4 w-4" /> 新建会话
+          <div className="p-4 bg-white border-b border-slate-200">
+             <button onClick={createNewSession} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white hover:bg-blue-600 transition-all shadow-xl shadow-slate-200">
+               <Plus size={16} /> 开启智能对话
              </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-4 custom-scrollbar">
-             <div>
-               <h5 className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">今天</h5>
-               <div className="space-y-1">
-                 {['关于 Transformer 的总结', '模型量化方案讨论', 'RAG 系统架构图说明'].map((title, i) => (
-                   <button key={i} className={`flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-all ${i === 0 ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
-                     <BookOpen className={`h-4 w-4 shrink-0 ${i === 0 ? 'text-blue-500' : 'text-slate-400'}`} />
-                     <span className="truncate">{title}</span>
-                   </button>
-                 ))}
+          <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
+             {['今天', '昨日'].map(dateGroup => (
+               <div key={dateGroup}>
+                 <h5 className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">{dateGroup}</h5>
+                 <div className="space-y-1">
+                   {sessions.filter(s => s.date === dateGroup).map(s => (
+                     <div 
+                      key={s.id} 
+                      onClick={() => setActiveSessionId(s.id)}
+                      className={`group flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${activeSessionId === s.id ? 'bg-white shadow-sm ring-1 ring-slate-200 font-bold' : 'text-slate-600 hover:bg-slate-200/50'}`}
+                     >
+                       <div className="flex items-center gap-3 truncate">
+                         <MessageSquare size={14} className={activeSessionId === s.id ? 'text-blue-500' : 'text-slate-400'} />
+                         <span className="truncate text-sm">{s.title}</span>
+                       </div>
+                       <button onClick={(e) => handleDeleteSession(s.id, e)} className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 rounded transition-all">
+                         <Trash2 size={12} />
+                       </button>
+                     </div>
+                   ))}
+                 </div>
                </div>
-             </div>
-             <div>
-               <h5 className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">昨日</h5>
-               <div className="space-y-1">
-                 {['如何部署 Llama 3', '知识库数据清洗流程'].map((title, i) => (
-                   <button key={i} className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-left text-slate-600 hover:bg-slate-50 transition-all">
-                     <BookOpen className="h-4 w-4 shrink-0 text-slate-400" />
-                     <span className="truncate">{title}</span>
-                   </button>
-                 ))}
-               </div>
-             </div>
+             ))}
           </div>
-        </div>
-      </div>
-
-      {/* Main Chat Interface */}
-      <div className="flex flex-1 flex-col bg-white lg:rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-        {/* Chat Header */}
-        <div className="flex h-14 items-center justify-between border-b border-slate-100 px-4 sm:px-6 shrink-0">
-          <div className="flex items-center gap-3">
-             <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900"
-             >
-               <List className="h-5 w-5" />
-             </button>
-             <Sparkles className="h-5 w-5 text-blue-500 shrink-0" />
-             <h2 className="font-semibold text-slate-800 truncate text-sm sm:text-base">深度学习基础探讨</h2>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline text-xs font-medium text-slate-500">深度思考</span>
-              <button 
-                onClick={() => setIsDeepMode(!isDeepMode)}
-                className={`relative h-5 w-9 sm:h-6 sm:w-11 rounded-full p-1 transition-colors ${isDeepMode ? 'bg-blue-600' : 'bg-slate-200'}`}
-              >
-                <div className={`h-3 w-3 sm:h-4 sm:w-4 rounded-full bg-white transition-transform ${isDeepMode ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-            <button className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-              <Maximize2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Message Area */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8 custom-scrollbar">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`max-w-[90%] sm:max-w-[75%] lg:max-w-[70%] shadow-minimal ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-[16px_16px_0_16px]' : 'bg-white border border-slate-200 text-slate-800 rounded-[16px_16px_16px_0]'}`}>
-                {msg.role === 'assistant' && (
-                   <div className="px-4 sm:px-5 pt-3 text-[10px] sm:text-[12px] font-bold text-blue-600 uppercase tracking-tight">AI 助手</div>
-                )}
-                {msg.role === 'assistant' && msg.thought && isDeepMode && (
-                  <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-blue-50/30">
-                    <button 
-                      onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
-                      className="flex items-center justify-between w-full group/thought"
-                    >
-                      <div className="flex items-center gap-2.5 text-xs font-bold text-blue-600">
-                        <div className="relative">
-                          <Cpu className="h-4 w-4" />
-                          <motion.div 
-                            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-                            transition={{ repeat: Infinity, duration: 2 }}
-                            className="absolute inset-0 bg-blue-400 rounded-full blur-[2px] -z-10"
-                          />
-                        </div>
-                        AI 思考深度链
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          {[1, 2, 3].map(i => (
-                            <motion.div 
-                              key={i}
-                              animate={{ height: [4, 8, 4] }}
-                              transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                              className="w-0.5 bg-blue-300 rounded-full"
-                            />
-                          ))}
-                        </div>
-                        {isThinkingExpanded ? <ChevronUp className="h-3.5 w-3.5 text-blue-400" /> : <ChevronDown className="h-3.5 w-3.5 text-blue-400" />}
-                      </div>
-                    </button>
-                    <AnimatePresence>
-                      {isThinkingExpanded && (
-                        <motion.div 
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-3 text-xs text-slate-500 leading-relaxed border-l-2 border-blue-100 pl-4 py-1.5 space-y-2">
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              <Activity className="h-3 w-3" /> 模型推理路径
-                            </div>
-                            <p className="italic">{msg.thought}</p>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {['知识库检回', '逻辑验证', '上下文對齐'].map(step => (
-                                <span key={step} className="px-1.5 py-0.5 rounded bg-white border border-slate-100 text-[9px] font-medium text-slate-400 flex items-center gap-1">
-                                  <div className="h-1 w-1 rounded-full bg-blue-400" /> {step}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-                <div className="px-4 sm:px-5 py-3 sm:py-4 text-[14px] sm:text-[15px] leading-relaxed whitespace-pre-line overflow-hidden break-words">
-                  {msg.content}
+          <div className="p-4 border-t border-slate-200 bg-white/50">
+             <div className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-white">
+                <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">U</div>
+                <div className="flex-1 min-w-0">
+                   <p className="text-xs font-bold text-slate-900 truncate">测试用户</p>
+                   <p className="text-[10px] text-slate-400 font-bold tracking-tighter uppercase">PRO EDITION</p>
                 </div>
-                {msg.role === 'assistant' && msg.citations && (
-                   <div className="px-4 sm:px-5 py-3 bg-slate-50/50 border-t border-slate-100 rounded-b-2xl">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">引用溯源</p>
-                      <div className="space-y-2">
+                <Settings size={16} className="text-slate-400" />
+             </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+        <header className="h-16 border-b border-slate-100 px-6 flex items-center justify-between shrink-0 sticky top-0 bg-white/80 backdrop-blur-md z-20">
+           <div className="flex items-center gap-4">
+              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900"><List size={20} /></button>
+              <div className="flex items-center gap-3">
+                 <div className="h-10 w-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20"><Sparkles size={20} /></div>
+                 <div>
+                    <h2 className="text-sm font-black text-slate-900 tracking-tight uppercase">智能回答专家</h2>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase">
+                       <span className="flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-green-500" /> Gemini 3.0</span>
+                    </div>
+                 </div>
+              </div>
+           </div>
+           <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setIsDeepMode(!isDeepMode)}>
+                 <span className={`hidden sm:inline text-[10px] font-black uppercase tracking-widest ${isDeepMode ? 'text-blue-600' : 'text-slate-400'}`}>Deep Think</span>
+                 <div className={`p-1 relative h-5 w-9 rounded-full transition-colors ${isDeepMode ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                    <div className={`h-3 w-3 rounded-full bg-white transition-all ${isDeepMode ? 'translate-x-4' : 'translate-x-0'}`} />
+                 </div>
+              </div>
+              <button className="p-2.5 text-slate-400 hover:text-slate-900 border border-slate-100 rounded-xl"><Share2 size={18} /></button>
+           </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 space-y-8 bg-slate-50/20 custom-scrollbar">
+           {messages.map((msg) => (
+             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`group relative w-full lg:max-w-[92%] ${msg.role === 'user' ? 'bg-slate-900 text-white rounded-[32px] p-8 shadow-2xl' : 'bg-white border border-slate-200 text-slate-800 rounded-[32px] p-10 shadow-sm'}`}>
+                   {msg.role === 'assistant' && (
+                     <div className="absolute -top-3 left-6">
+                        <div className="bg-blue-600 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg shadow-blue-500/20 ring-4 ring-white">AI Assistant</div>
+                     </div>
+                   )}
+                   
+                   {msg.role === 'assistant' && msg.thought && isDeepMode && (
+                     <div className="mb-6 bg-blue-50/50 rounded-2xl border border-blue-100/50 overflow-hidden">
+                        <button onClick={() => setIsThinkingExpanded(!isThinkingExpanded)} className="w-full flex items-center justify-between p-4 bg-white/40">
+                           <div className="flex items-center gap-3">
+                             <div className="relative">
+                               <Cpu className="h-4 w-4 text-blue-600" />
+                               <motion.div animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.6, 0.3] }} transition={{ repeat: Infinity, duration: 2 }} className="absolute inset-0 bg-blue-400 rounded-full blur-[2px] -z-10" />
+                             </div>
+                             <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest">专家思维链路 (CoT)</span>
+                           </div>
+                           <ChevronDown size={14} className={`text-blue-500 transition-transform ${isThinkingExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {isThinkingExpanded && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 pb-4">
+                               <p className="text-xs text-slate-600 italic leading-relaxed border-l-2 border-blue-100 pl-4 py-2">{msg.thought}</p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                     </div>
+                   )}
+
+                   <div className="text-[15px] leading-8 font-medium">{msg.content}</div>
+
+                   {msg.role === 'assistant' && msg.citations && (
+                     <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {msg.citations.map((cite, i) => (
-                          <div key={i} className="group/cite flex items-start gap-3 cursor-pointer">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white border border-slate-200 text-[10px] font-bold text-slate-400 group-hover/cite:border-blue-400 group-hover/cite:text-blue-600 shadow-sm transition-all">{i+1}</span>
-                            <div className="space-y-0.5 min-w-0">
-                              <p className="text-xs text-slate-600 line-clamp-1">{cite.text}</p>
-                              <p className="text-[10px] text-blue-500 font-medium">来自 Wiki: {cite.pageTitle}</p>
-                            </div>
+                          <div key={i} className="flex gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-white hover:border-blue-200 transition-all cursor-pointer group/cite">
+                             <div className="h-5 w-5 bg-white border border-slate-200 rounded text-[10px] font-bold text-slate-400 flex items-center justify-center group-hover/cite:bg-blue-600 group-hover/cite:text-white transition-colors">{i+1}</div>
+                             <div className="min-w-0">
+                                <p className="text-[11px] text-slate-500 line-clamp-1">{cite.text}</p>
+                                <p className="text-[9px] text-blue-600 font-bold uppercase tracking-tight mt-1">{cite.pageTitle}</p>
+                             </div>
                           </div>
                         ))}
-                      </div>
-                   </div>
-                )}
-              </div>
-              {msg.role === 'assistant' && (
-                <div className="mt-2 flex items-center gap-1 opacity-100 sm:opacity-0 transition-opacity hover:opacity-100 group-messages pl-2">
-                   <button className="p-1 px-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"><ThumbsUp className="h-3.5 w-3.5" /></button>
-                   <button className="p-1 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"><ThumbsDown className="h-3.5 w-3.5" /></button>
-                   <button 
-                    onClick={() => copyToClipboard(msg.content, msg.id)}
-                    className="p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all flex items-center gap-1.5"
-                   >
-                     {copiedId === msg.id ? (
-                       <>
-                         <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                         <span className="text-[10px] text-green-600 font-bold">已复制</span>
-                       </>
-                     ) : (
-                       <Copy className="h-3.5 w-3.5" />
-                     )}
-                   </button>
-                   <button className="hidden sm:block p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all text-[10px] font-medium ml-2 border border-slate-100">转存为 Wiki</button>
+                     </div>
+                   )}
                 </div>
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
+
+                {msg.role === 'assistant' && (
+                  <div className="mt-4 flex items-center gap-2 pl-4">
+                     <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-[11px] font-bold text-slate-500 hover:bg-white hover:text-blue-600 transition-all shadow-sm"><ThumbsUp size={14} /> 有帮助</button>
+                     <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 hover:bg-white transition-all shadow-sm"><ThumbsDown size={14} /></button>
+                     <div className="w-px h-4 bg-slate-200 mx-1" />
+                     <button onClick={() => copyToClipboard(msg.content, msg.id)} className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:text-slate-900 transition-all">
+                        {copiedId === msg.id ? <CheckCircle2 size={16} className="text-green-500" /> : <Copy size={14} />}
+                     </button>
+                  </div>
+                )}
+             </div>
+           ))}
+           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/30 shrink-0">
-          <div className="max-w-[900px] mx-auto relative">
-             <div className="bg-white rounded-2xl border border-slate-200 shadow-lg focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/5 transition-all p-1">
-                <textarea 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="询问任何问题..." 
-                  className="w-full bg-transparent border-none text-sm sm:text-[15px] focus:ring-0 resize-none px-4 py-3 min-h-[56px] max-h-[200px]"
-                  style={{ height: 'auto' }}
-                  rows={2}
-                  disabled={isTyping}
-                />
-                <div className="flex items-center justify-between px-3 pb-2">
-                   <div className="flex items-center gap-1">
-                      <button className="hidden sm:flex items-center gap-1.5 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-                        <Command className="h-4 w-4" />
-                        <span className="text-[10px] font-bold">快捷指令</span>
-                      </button>
-                      <button className="hidden sm:flex items-center gap-1.5 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-                        <Search className="h-4 w-4" />
-                        <span className="text-[10px] font-bold">强制检索</span>
-                      </button>
-                      <button className="sm:hidden p-1.5 text-slate-500">
-                        <Plus className="h-4 w-4" />
-                      </button>
-                   </div>
-                   <button 
-                    onClick={handleSendMessage}
-                    disabled={!input.trim() || isTyping}
-                    className={`flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl shadow-sm transition-all ${input.trim() && !isTyping ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95' : 'bg-slate-100 text-slate-300'}`}
-                   >
-                     {isTyping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                   </button>
-                </div>
-             </div>
-             <p className="mt-2 text-[9px] sm:text-[10px] text-center text-slate-400">
-               LLM 助手也可能出错，请核实重要信息。
-             </p>
-          </div>
+        <div className="p-6 bg-white border-t border-slate-100">
+           <div className="w-full mx-auto relative group">
+              <div className="bg-white rounded-[32px] border-2 border-slate-100 p-2 shadow-2xl shadow-slate-200 transition-all focus-within:border-slate-900">
+                 <textarea 
+                  value={input} onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                  placeholder="询问任何关于知识库的问题..." 
+                  className="w-full bg-transparent border-none text-base lg:text-lg focus:ring-0 outline-none resize-none px-6 pt-5 pb-16 min-h-[120px] max-h-[400px]"
+                 />
+                 <div className="absolute bottom-5 left-8 flex items-center gap-3">
+                    <button className="px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 flex items-center gap-2 group/btn"><Zap size={14} className="text-blue-500 group-hover/btn:animate-pulse" /> 常用方案摘要</button>
+                    <button className="hidden sm:flex px-4 py-2 rounded-full bg-slate-50 border text-[11px] font-black text-slate-500 hover:bg-slate-100 items-center gap-2"><Plus size={14} /> 关联文档</button>
+                 </div>
+                 <button onClick={handleSendMessage} disabled={!input.trim() || isTyping} className={`absolute bottom-4 right-4 h-14 w-14 rounded-full flex items-center justify-center shadow-xl transition-all ${input.trim() && !isTyping ? 'bg-slate-900 text-white hover:scale-105 active:scale-95' : 'bg-slate-50 text-slate-200'}`}>
+                    {isTyping ? <Loader2 size={24} className="animate-spin" /> : <Send size={20} />}
+                 </button>
+              </div>
+              <p className="mt-4 text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest shrink-0">AI 助手可能产生误差，请核实重要信息</p>
+           </div>
         </div>
       </div>
     </div>

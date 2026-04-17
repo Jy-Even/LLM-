@@ -272,9 +272,9 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className={`h-full ${activeModule === 'schema' ? 'p-0' : 'p-4 md:p-8'}`}
+                className={`h-full ${['schema', 'chat', 'search', 'upload', 'quality', 'wiki'].includes(activeModule) ? 'p-0' : 'p-4 md:p-8'}`}
               >
-                <div className={`h-full ${activeModule === 'wiki' ? 'mx-auto max-w-[1360px]' : 'w-full'}`}>
+                <div className={`h-full w-full`}>
                 {activeModule === 'upload' && <DocumentUpload />}
                 {activeModule === 'wiki' && <WikiPageModule />}
                 {activeModule === 'search' && <KnowledgeSearch />}
