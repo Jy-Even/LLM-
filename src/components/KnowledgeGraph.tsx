@@ -49,13 +49,19 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
   const [neighbors, setNeighbors] = useState<GraphNode[]>([]);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  const getNeighbors = (nodeId: string) => {
-    const connectedIds = MOCK_GRAPH.links
+  const getNeighborsWithLinks = (nodeId: string) => {
+    return MOCK_GRAPH.links
       .filter(link => link.source === nodeId || link.target === nodeId)
-      .map(link => link.source === nodeId ? link.target as string : link.source as string);
-    
-    return MOCK_GRAPH.nodes.filter(n => connectedIds.includes(n.id));
+      .map(link => {
+        const neighborId = link.source === nodeId ? link.target : link.source;
+        const neighbor = MOCK_GRAPH.nodes.find(n => n.id === neighborId);
+        return {
+          ...neighbor!,
+          connectionType: link.type
+        };
+      });
   };
 
   useEffect(() => {
@@ -71,11 +77,12 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
 
     // Zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 4])
+      .scaleExtent([0.1, 8])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
       });
 
+    zoomRef.current = zoom;
     svg.call(zoom);
 
     // Initial simulation data
@@ -133,8 +140,8 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       })
       .on('click', (event, d) => {
         setSelectedNode(d);
-        setNeighbors(getNeighbors(d.id));
-        onNodeClick?.(d);
+        const neighborsWithTypes = getNeighborsWithLinks(d.id);
+        setNeighbors(neighborsWithTypes as GraphNode[]);
       });
 
     // Node circles
@@ -167,18 +174,34 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
+    // Handle Resize
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        simulation.force('center', d3.forceCenter(width / 2, height / 2));
+        simulation.alpha(0.3).restart();
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
     return () => {
       simulation.stop();
+      resizeObserver.disconnect();
     };
   }, [onNodeClick]);
 
   const resetZoom = () => {
-    if (!svgRef.current) return;
+    if (!svgRef.current || !zoomRef.current) return;
     const svg = d3.select(svgRef.current);
-    svg.transition().duration(750).call(
-      d3.zoom<SVGSVGElement, unknown>().transform as any,
-      d3.zoomIdentity
-    );
+    svg.transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+  };
+
+  const handleZoom = (delta: number) => {
+    if (!svgRef.current || !zoomRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.transition().duration(300).call(zoomRef.current.scaleBy, delta);
   };
 
   return (
@@ -194,15 +217,43 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
       {/* Controls Overlay */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
         <div className="flex bg-white/80 backdrop-blur-md rounded-xl border border-slate-200 p-1 shadow-sm">
-          <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFullScreen(!isFullScreen);
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+          >
             {isFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
-          <button onClick={resetZoom} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              resetZoom();
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+          >
             <RefreshCw className="h-4 w-4" />
           </button>
           <div className="w-px bg-slate-200 mx-1"></div>
-          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"><ZoomIn className="h-4 w-4" /></button>
-          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"><ZoomOut className="h-4 w-4" /></button>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleZoom(1.3);
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleZoom(0.7);
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -261,40 +312,56 @@ export default function KnowledgeGraph({ onNodeClick }: KnowledgeGraphProps) {
             <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
               <div className="grid grid-cols-2 gap-3">
                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">权重因子</div>
-                    <div className="text-lg font-bold text-slate-700">{selectedNode.val}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">节点标识</div>
+                    <div className="text-xs font-mono font-bold text-slate-700 truncate">#{selectedNode.id}</div>
                  </div>
                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-center">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">活跃连接</div>
-                    <div className="text-lg font-bold text-slate-700">{neighbors.length}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">核心权重</div>
+                    <div className="text-lg font-bold text-slate-700">{selectedNode.val}</div>
                  </div>
               </div>
 
               {neighbors.length > 0 && (
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Link2 className="h-3 w-3" /> 直接关联节点
+                    <Link2 className="h-3 w-3" /> 直接关联 ({neighbors.length})
                   </div>
                   <div className="space-y-2">
                     {neighbors.map(neighbor => (
-                      <button 
+                      <div 
                         key={neighbor.id}
-                        onClick={() => {
-                          setSelectedNode(neighbor);
-                          setNeighbors(getNeighbors(neighbor.id));
-                          onNodeClick?.(neighbor);
-                        }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-white hover:border-blue-200 hover:bg-blue-50/50 transition-all group"
+                        className="group flex items-center gap-2"
                       >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                            neighbor.type === 'page' ? 'bg-blue-500' : 
-                            neighbor.type === 'tag' ? 'bg-emerald-500' : 'bg-amber-500'
-                          }`}></div>
-                          <span className="text-xs font-medium text-slate-600 truncate">{neighbor.label}</span>
-                        </div>
-                        <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
-                      </button>
+                        <button 
+                          onClick={() => {
+                            setSelectedNode(neighbor);
+                            setNeighbors(getNeighborsWithLinks(neighbor.id) as GraphNode[]);
+                          }}
+                          className="flex-1 flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-white hover:border-blue-200 hover:shadow-sm transition-all text-left"
+                        >
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                neighbor.type === 'page' ? 'bg-blue-500' : 
+                                neighbor.type === 'tag' ? 'bg-emerald-500' : 'bg-amber-500'
+                              }`}></div>
+                              <span className="text-xs font-bold text-slate-700 truncate">{neighbor.label}</span>
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight ml-3">
+                              关系: {neighbor.connectionType === 'citation' ? '学术引用' : neighbor.connectionType === 'tag' ? '语义描述' : '贡献作者'}
+                            </span>
+                          </div>
+                        </button>
+                        {neighbor.type === 'page' && (
+                          <button 
+                            onClick={() => onNodeClick?.(neighbor)}
+                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all shrink-0"
+                            title="跳转至 Wiki 页面"
+                          >
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

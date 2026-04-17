@@ -38,12 +38,17 @@ import {
   Lightbulb,
   ArrowRight,
   Minimize2,
-  Maximize2
+  Maximize2,
+  Command,
+  Search as SearchIcon,
+  Sparkles,
+  MousePointer2,
+  Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ModuleId } from './types.ts';
 
-// Modules (I will implement basic views within this file for brevity or separate them if needed)
+// Modules
 import DocumentUpload from './modules/DocumentUpload.tsx';
 import WikiPageModule from './modules/WikiPage.tsx';
 import KnowledgeSearch from './modules/Search.tsx';
@@ -51,9 +56,126 @@ import IntelligentChat from './modules/Chat.tsx';
 import SchemaConfig from './modules/SchemaConfig.tsx';
 import QualityControl from './modules/QualityControl.tsx';
 
+function CommandPalette({ isOpen, onClose, onSelect }: { isOpen: boolean; onClose: () => void; onSelect: (id: ModuleId) => void }) {
+  const [search, setSearch] = useState('');
+  
+  const items = [
+    { id: 'wiki', label: 'Wiki 知识库', sub: '查阅与编辑页面', icon: BookOpen },
+    { id: 'chat', label: '智能助手', sub: '基于 RAG 的问答', icon: MessageSquare },
+    { id: 'search', label: '多源检索', icon: SearchIcon, sub: '搜索文档、网页与笔记' },
+    { id: 'upload', label: '数据导入', icon: UploadCloud, sub: '上传并索引新文档' },
+    { id: 'quality', label: '系统体检', icon: CheckCircle2, sub: '一致性与链接检查' },
+    { id: 'schema', label: '结构配置', icon: Settings, sub: '定义实体与规则' },
+  ];
+
+  const filtered = items.filter(i => i.label.includes(search) || i.sub?.includes(search));
+
+  useEffect(() => {
+    const handleDown = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleDown);
+    return () => window.removeEventListener('keydown', handleDown);
+  }, [onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: -20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -20 }}
+        className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+      >
+        <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+          <SearchIcon className="h-5 w-5 text-slate-400" />
+          <input 
+            autoFocus
+            type="text" 
+            placeholder="搜索功能或指令..." 
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 bg-transparent border-none text-base focus:ring-0 placeholder:text-slate-400"
+          />
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded text-[10px] font-bold text-slate-400 uppercase">
+            ESC
+          </div>
+        </div>
+        
+        <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+          {filtered.length > 0 ? (
+            <div className="space-y-1">
+              {filtered.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onSelect(item.id as ModuleId);
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 group-hover:border-blue-100 transition-all">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{item.label}</div>
+                      <div className="text-xs text-slate-400">{item.sub}</div>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-200 group-hover:text-blue-400 transition-all" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="py-12 text-center">
+              <Sparkles className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">未找到相关功能</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] font-medium text-slate-400">
+           <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5"><ChevronRight className="h-3 w-3" /> 选择</span>
+              <span className="flex items-center gap-1.5"><RefreshCw className="h-3 w-3" /> 切换</span>
+           </div>
+           <div className="flex items-center gap-2">
+              <Command className="h-3 w-3" /> <span>+ K</span>
+           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeModule, setActiveModule] = useState<ModuleId>('wiki');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
+
+  useEffect(() => {
+    const handleDown = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsCommandOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleDown);
+    return () => window.removeEventListener('keydown', handleDown);
+  }, []);
 
   useEffect(() => {
     // Simulate loading
@@ -120,12 +242,24 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden xl:flex h-9 w-[240px] items-center gap-2 rounded-full bg-slate-100 px-4 border border-slate-200 focus-within:bg-white focus-within:border-blue-400 transition-all">
-            <Search className="h-4 w-4 text-slate-400" />
-            <input type="text" placeholder="快速检索..." className="bg-transparent border-none text-xs focus:ring-0 w-full" />
-          </div>
+          <button 
+            onClick={() => setIsCommandOpen(true)}
+            className="hidden xl:flex h-9 w-[240px] items-center gap-2 rounded-full bg-slate-100 px-4 border border-slate-200 hover:bg-white hover:border-blue-400 transition-all text-slate-400"
+          >
+            <Search className="h-4 w-4" />
+            <span className="text-xs">快速检索...</span>
+            <div className="ml-auto flex items-center gap-1 px-1.5 py-0.5 bg-slate-200/50 rounded text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+              <Command className="h-2.5 w-2.5" /> K
+            </div>
+          </button>
         </div>
       </header>
+
+      <CommandPalette 
+        isOpen={isCommandOpen} 
+        onClose={() => setIsCommandOpen(false)} 
+        onSelect={setActiveModule} 
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">

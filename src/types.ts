@@ -55,6 +55,7 @@ export interface GraphNode extends d3.SimulationNodeDatum {
   label: string;
   type: 'page' | 'tag' | 'author';
   val: number;
+  connectionType?: string;
 }
 
 export interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {

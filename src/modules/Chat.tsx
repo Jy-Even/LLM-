@@ -16,7 +16,11 @@ import {
   BookOpen,
   ChevronUp,
   Loader2,
-  List
+  List,
+  Cpu,
+  Fingerprint,
+  Activity,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChatMessage } from '../types.ts';
@@ -35,8 +39,15 @@ export default function IntelligentChat() {
   const [isThinkingExpanded, setIsThinkingExpanded] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInstance = useRef<any>(null);
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -191,24 +202,60 @@ export default function IntelligentChat() {
                    <div className="px-4 sm:px-5 pt-3 text-[10px] sm:text-[12px] font-bold text-blue-600 uppercase tracking-tight">AI 助手</div>
                 )}
                 {msg.role === 'assistant' && msg.thought && isDeepMode && (
-                  <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                  <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-blue-50/30">
                     <button 
                       onClick={() => setIsThinkingExpanded(!isThinkingExpanded)}
-                      className="flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      className="flex items-center justify-between w-full group/thought"
                     >
-                      <Zap className="h-3.5 w-3.5" />
-                      思考过程
-                      {isThinkingExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      <div className="flex items-center gap-2.5 text-xs font-bold text-blue-600">
+                        <div className="relative">
+                          <Cpu className="h-4 w-4" />
+                          <motion.div 
+                            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="absolute inset-0 bg-blue-400 rounded-full blur-[2px] -z-10"
+                          />
+                        </div>
+                        AI 思考深度链
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3].map(i => (
+                            <motion.div 
+                              key={i}
+                              animate={{ height: [4, 8, 4] }}
+                              transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                              className="w-0.5 bg-blue-300 rounded-full"
+                            />
+                          ))}
+                        </div>
+                        {isThinkingExpanded ? <ChevronUp className="h-3.5 w-3.5 text-blue-400" /> : <ChevronDown className="h-3.5 w-3.5 text-blue-400" />}
+                      </div>
                     </button>
-                    {isThinkingExpanded && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        className="mt-2 text-xs text-slate-500 leading-relaxed italic border-l-2 border-slate-200 pl-3 py-1"
-                      >
-                        {msg.thought}
-                      </motion.div>
-                    )}
+                    <AnimatePresence>
+                      {isThinkingExpanded && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3 text-xs text-slate-500 leading-relaxed border-l-2 border-blue-100 pl-4 py-1.5 space-y-2">
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              <Activity className="h-3 w-3" /> 模型推理路径
+                            </div>
+                            <p className="italic">{msg.thought}</p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {['知识库检回', '逻辑验证', '上下文對齐'].map(step => (
+                                <span key={step} className="px-1.5 py-0.5 rounded bg-white border border-slate-100 text-[9px] font-medium text-slate-400 flex items-center gap-1">
+                                  <div className="h-1 w-1 rounded-full bg-blue-400" /> {step}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
                 <div className="px-4 sm:px-5 py-3 sm:py-4 text-[14px] sm:text-[15px] leading-relaxed whitespace-pre-line overflow-hidden break-words">
@@ -235,7 +282,19 @@ export default function IntelligentChat() {
                 <div className="mt-2 flex items-center gap-1 opacity-100 sm:opacity-0 transition-opacity hover:opacity-100 group-messages pl-2">
                    <button className="p-1 px-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"><ThumbsUp className="h-3.5 w-3.5" /></button>
                    <button className="p-1 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"><ThumbsDown className="h-3.5 w-3.5" /></button>
-                   <button className="p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"><Copy className="h-3.5 w-3.5" /></button>
+                   <button 
+                    onClick={() => copyToClipboard(msg.content, msg.id)}
+                    className="p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all flex items-center gap-1.5"
+                   >
+                     {copiedId === msg.id ? (
+                       <>
+                         <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                         <span className="text-[10px] text-green-600 font-bold">已复制</span>
+                       </>
+                     ) : (
+                       <Copy className="h-3.5 w-3.5" />
+                     )}
+                   </button>
                    <button className="hidden sm:block p-1 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all text-[10px] font-medium ml-2 border border-slate-100">转存为 Wiki</button>
                 </div>
               )}

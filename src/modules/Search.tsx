@@ -13,13 +13,21 @@ import {
   MoreVertical,
   ArrowRight,
   TrendingUp,
-  History
+  History,
+  Zap,
+  Target,
+  CheckCircle2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SearchResult } from '../types.ts';
 
 export default function KnowledgeSearch() {
   const [query, setQuery] = useState('');
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+
+  const saveToWiki = (id: string) => {
+    setSavedIds(prev => [...prev, id]);
+  };
   const [results] = useState<SearchResult[]>([
     {
       id: '1',
@@ -33,7 +41,7 @@ export default function KnowledgeSearch() {
     {
       id: '2',
       title: '2024 年度 AI 行业趋势报告',
-      snippet: '报告指出，大语言模型（LLM）的检索增强生成（RAG）技术正在成为知识库的核心。通过结合高效的 <mark class="bg-yellow-200">向量检索</mark> 和传统搜索引擎，企业能够...',
+      snippet: '报告指出，大语言模型（LLM）的检索增强生成（RAG）技术正在成为知识库的核心。通过结合高效的 <mark class="bg-yellow-200">智能检索</mark> 和传统搜索引擎，企业能够...',
       source: 'Internal_Wiki',
       relevance: 85,
       type: 'doc',
@@ -42,7 +50,7 @@ export default function KnowledgeSearch() {
     {
       id: '3',
       title: '如何构建一个 RAG 系统',
-      snippet: '构建一个基于知识库的问答系统需要考虑数据分块、嵌入模型选择以及重排序（Rerank）逻辑。对于 <mark class="bg-yellow-200">语义检索</mark> 的准确性至关重要...',
+      snippet: '构建一个基于知识库的问答系统需要考虑数据分块、模型选择以及重排序（Rerank）逻辑。对于 <mark class="bg-yellow-200">语义理解</mark> 的准确性至关重要...',
       source: 'https://docs.ai-system.io',
       relevance: 72,
       type: 'web',
@@ -156,6 +164,14 @@ export default function KnowledgeSearch() {
                       {result.source}
                     </span>
                     <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {result.date}</span>
+                    <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-bold text-slate-400">
+                        <Target className="h-2.5 w-2.5" /> 初始召回: {result.relevance - 5}%
+                      </span>
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-[9px] font-bold text-blue-600">
+                        <Zap className="h-2.5 w-2.5" /> AI 重排: {result.relevance}%
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start shrink-0">
@@ -186,8 +202,26 @@ export default function KnowledgeSearch() {
                   <button className="flex items-center gap-1.5 rounded-lg border border-slate-100 px-3 py-1 text-[10px] sm:text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">
                     查看详情
                   </button>
-                  <button className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1 text-[10px] sm:text-xs font-bold text-blue-600 hover:bg-blue-100 transition-colors border border-blue-100">
-                    <BookOpen className="h-3.5 w-3.5" /> 存为 Wiki
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      saveToWiki(result.id);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-[10px] sm:text-xs font-bold transition-all border ${
+                      savedIds.includes(result.id) 
+                        ? 'bg-green-50 text-green-600 border-green-100' 
+                        : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+                    }`}
+                  >
+                    {savedIds.includes(result.id) ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5" /> 已存入
+                      </>
+                    ) : (
+                      <>
+                        <BookOpen className="h-3.5 w-3.5" /> 存为 Wiki
+                      </>
+                    )}
                   </button>
                 </div>
                 <button className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-blue-600 hover:gap-2.5 transition-all">

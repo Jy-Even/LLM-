@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   Search, 
   Plus, 
@@ -12,7 +12,8 @@ import {
   ExternalLink,
   GitBranch,
   BookMarked,
-  FileText
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import KnowledgeGraph from '../components/KnowledgeGraph';
@@ -25,13 +26,13 @@ export default function WikiPageModule() {
     setExpandedNodes(prev => prev.includes(id) ? prev.filter(n => n !== id) : [...prev, id]);
   };
 
-  const handleNodeClick = (node: any) => {
+  const handleNodeClick = useCallback((node: any) => {
     // If it's a page node, we simulate navigation to that page
     if (node.type === 'page') {
       setActiveTab('content');
       // In a real app, we'd set the current page ID here
     }
-  };
+  }, []);
 
   return (
     <div className="flex flex-col lg:flex-row h-full gap-6 sm:gap-8">
@@ -109,31 +110,41 @@ export default function WikiPageModule() {
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 shadow-minimal flex flex-col relative overflow-hidden min-h-[500px]">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-4 gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-            <span className="text-sm font-bold text-slate-900 tracking-tight truncate max-w-full">近期编辑: 深度学习基础</span>
-            <div className="flex p-1 bg-[#F1F5F9] rounded-lg sm:ml-4">
-              <button 
-                onClick={() => setActiveTab('content')}
-                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'content' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                内容
+        <div className="flex flex-col border-b border-slate-100">
+          <div className="flex items-center gap-2 px-6 pt-4 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest overflow-x-auto no-scrollbar">
+            <span className="flex items-center gap-1.5 hover:text-blue-500 cursor-pointer transition-colors"><BookOpen className="h-3 w-3" /> 知识库仪表盘</span>
+            <ChevronRight className="h-2.5 w-2.5 opacity-40 shrink-0" />
+            <span className="flex items-center gap-1.5 hover:text-blue-500 cursor-pointer transition-colors">人工神经网络</span>
+            <ChevronRight className="h-2.5 w-2.5 opacity-40 shrink-0" />
+            <span className="text-slate-900 border-b border-blue-500 pb-0.5">深度学习基础</span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-4 gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+              <span className="text-sm font-bold text-slate-900 tracking-tight truncate max-w-full">近期编辑: 深度学习基础</span>
+              <div className="flex p-1 bg-[#F1F5F9] rounded-lg sm:ml-4">
+                <button 
+                  onClick={() => setActiveTab('content')}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'content' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  内容
+                </button>
+                <button 
+                  onClick={() => setActiveTab('graph')}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'graph' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  图谱
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="rounded-lg bg-[#F1F5F9] px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-200 transition-all">
+                编辑
               </button>
-              <button 
-                onClick={() => setActiveTab('graph')}
-                className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'graph' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                图谱
+              <button className="p-2 text-slate-400 hover:text-slate-600">
+                <MoreHorizontal className="h-4 w-4" />
               </button>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="rounded-lg bg-[#F1F5F9] px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-200 transition-all">
-              编辑
-            </button>
-            <button className="p-2 text-slate-400 hover:text-slate-600">
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
@@ -152,13 +163,13 @@ export default function WikiPageModule() {
               <h2 className="text-xl font-bold mb-3 mt-8"># 核心组件</h2>
               <p>一个典型的深度神经网络由以下三部分组成：</p>
               <ul className="list-disc pl-6 space-y-2 my-4">
-                <li><strong>Data Ingestion</strong>: 数据预处理与向量化</li>
-                <li><strong>Retrieval</strong>: 基于 <code>Cosine Similarity</code> 的语义检索</li>
-                <li><strong>Generation</strong>: 结合 Context 的 LLM 回复</li>
+                <li><strong>Data Ingestion</strong>: 数据清洗与结构化处理</li>
+                <li><strong>Retrieval</strong>: 基于关键词与语义的混合检索</li>
+                <li><strong>Generation</strong>: 结合上下文的 LLM 答复</li>
               </ul>
 
               <div className="mt-8 p-4 bg-[#F8FAFC] border border-slate-200 rounded-xl">
-                 <div className="text-xs font-bold text-blue-600 mb-1">[[向量数据库选型]]</div>
+                 <div className="text-xs font-bold text-blue-600 mb-1">[[知识库索引策略]]</div>
                  <div className="text-[11px] text-slate-400">此页面被引用 42 次</div>
               </div>
             </article>
