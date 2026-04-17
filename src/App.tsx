@@ -266,15 +266,15 @@ export default function App() {
         {/* Module Content Wrapper */}
         <div className="w-full h-full min-h-full">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={activeModule}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="h-full p-4 md:p-8"
-            >
-              <div className="mx-auto max-w-[1360px] h-full">
+              <motion.div
+                key={activeModule}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className={`h-full ${activeModule === 'schema' ? 'p-0' : 'p-4 md:p-8'}`}
+              >
+                <div className={`h-full ${activeModule === 'wiki' ? 'mx-auto max-w-[1360px]' : 'w-full'}`}>
                 {activeModule === 'upload' && <DocumentUpload />}
                 {activeModule === 'wiki' && <WikiPageModule />}
                 {activeModule === 'search' && <KnowledgeSearch />}

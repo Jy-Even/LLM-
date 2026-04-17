@@ -38,6 +38,8 @@ export interface UploadFile {
   progress: number;
   status: 'uploading' | 'success' | 'error';
   error?: string;
+  content?: string;
+  previewUrl?: string;
 }
 
 export interface QualityIssue {
