@@ -2,27 +2,20 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import sqlite3Pkg from 'sqlite3';
-const sqlite3 = sqlite3Pkg.verbose();
-import { open } from 'sqlite';
+import Database from 'better-sqlite3';
 import cors from 'cors';
-
-console.log('Server process starting...');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function initDb() {
-  console.log('Initializing database...');
+function initDb() {
+  console.log('Initializing database (better-sqlite3)...');
   try {
-    const db = await open({
-      filename: './database.sqlite',
-      driver: sqlite3.Database
-    });
+    const db = new Database('./database.sqlite');
     console.log('Database connection opened.');
     
     // Create tables if they don't exist
-    await db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS wiki_pages (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -75,69 +68,87 @@ async function startServer() {
     // 1. Health check mapped early
     app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-    // 2. Init DB
-    const db = await initDb();
+    // 2. Init DB synchronously
+    const db = initDb();
     console.log('Database initialization successful.');
 
     // 3. API Routes
     console.log('Registering API routes...');
     
-    app.get('/api/wiki', async (req, res) => {
+    app.get('/api/wiki', (req, res) => {
       try {
-        const pages = await db.all('SELECT * FROM wiki_pages ORDER BY updated_at DESC');
+        const pages = db.prepare('SELECT * FROM wiki_pages ORDER BY updated_at DESC').all() as any[];
+        const tagStmt = db.prepare('SELECT name FROM tags t JOIN page_tags pt ON t.id = pt.tag_id WHERE pt.page_id = ?');
         for (const page of pages) {
-          const tags = await db.all(
-            'SELECT name FROM tags t JOIN page_tags pt ON t.id = pt.tag_id WHERE pt.page_id = ?',
-            page.id
-          );
+          const tags = tagStmt.all(page.id) as any[];
           page.tags = tags.map((t: any) => t.name);
         }
         res.json(pages);
       } catch (e) {
+        console.error('Failed to fetch wiki:', e);
         res.status(500).json({ error: 'Failed to fetch wiki' });
       }
     });
 
-    app.post('/api/wiki', async (req, res) => {
-      const { id, title, content, snippet, source, type, relevance, author, tags } = req.body;
-      await db.run(
-        `INSERT OR REPLACE INTO wiki_pages (id, title, content, snippet, source, type, relevance, author, updated_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [id, title, content, snippet, source, type, relevance, author]
-      );
+    app.post('/api/wiki', (req, res) => {
+      try {
+        const { id, title, content, snippet, source, type, relevance, author, tags } = req.body;
+        
+        db.prepare(`
+          INSERT OR REPLACE INTO wiki_pages (id, title, content, snippet, source, type, relevance, author, updated_at) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(id, title, content, snippet, source, type, relevance, author);
 
-      if (tags && Array.isArray(tags)) {
-        await db.run('DELETE FROM page_tags WHERE page_id = ?', id);
-        for (const tagName of tags) {
-          await db.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', tagName);
-          const tag = await db.get('SELECT id FROM tags WHERE name = ?', tagName);
-          await db.run('INSERT INTO page_tags (page_id, tag_id) VALUES (?, ?)', [id, tag.id]);
+        if (tags && Array.isArray(tags)) {
+          db.prepare('DELETE FROM page_tags WHERE page_id = ?').run(id);
+          const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
+          const getTag = db.prepare('SELECT id FROM tags WHERE name = ?');
+          const linkTag = db.prepare('INSERT INTO page_tags (page_id, tag_id) VALUES (?, ?)');
+          
+          for (const tagName of tags) {
+            insertTag.run(tagName);
+            const tag = getTag.get(tagName) as any;
+            if (tag) linkTag.run(id, tag.id);
+          }
         }
+        res.json({ status: 'success', id });
+      } catch (e) {
+        console.error('Failed to post wiki:', e);
+        res.status(500).json({ error: 'Failed to save wiki' });
       }
-      res.json({ status: 'success', id });
     });
 
-    app.get('/api/chat', async (req, res) => {
-      const messages = await db.all('SELECT * FROM chat_history ORDER BY created_at ASC');
-      res.json(messages);
+    app.get('/api/chat', (req, res) => {
+      try {
+        const messages = db.prepare('SELECT * FROM chat_history ORDER BY created_at ASC').all();
+        res.json(messages);
+      } catch (e) {
+        console.error('Failed to get chat:', e);
+        res.status(500).json({ error: 'Failed to fetch chat logs' });
+      }
     });
 
-    app.post('/api/chat', async (req, res) => {
-      const { role, content } = req.body;
-      const result = await db.run(
-        'INSERT INTO chat_history (role, content) VALUES (?, ?)',
-        [role, content]
-      );
-      res.json({ status: 'success', id: result.lastID });
+    app.post('/api/chat', (req, res) => {
+      try {
+        const { role, content } = req.body;
+        const result = db.prepare('INSERT INTO chat_history (role, content) VALUES (?, ?)').run(role, content);
+        res.json({ status: 'success', id: result.lastInsertRowid });
+      } catch (e) {
+        console.error('Failed to save chat:', e);
+        res.status(500).json({ error: 'Failed to save chat log' });
+      }
     });
 
-    app.get('/api/search', async (req, res) => {
-      const { q } = req.query;
-      const results = await db.all(
-        'SELECT * FROM wiki_pages WHERE title LIKE ? OR content LIKE ? LIMIT 10',
-        [`%${q}%`, `%${q}%`]
-      );
-      res.json(results);
+    app.get('/api/search', (req, res) => {
+      try {
+        const { q } = req.query;
+        const param = `%${q}%`;
+        const results = db.prepare('SELECT * FROM wiki_pages WHERE title LIKE ? OR content LIKE ? LIMIT 10').all(param, param);
+        res.json(results);
+      } catch (e) {
+        console.error('Failed to search text:', e);
+        res.status(500).json({ error: 'Failed to search' });
+      }
     });
 
     // 4. Vite / Static mapping
